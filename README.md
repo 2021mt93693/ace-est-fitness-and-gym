@@ -56,8 +56,19 @@ rm -rf __pycache__ */__pycache__ .pytest_cache */.pytest_cache
 
 
 ## Building and running the application as a Docker image locally
-### Building docker image
-docker build -t ace-est-fitness-and-gym .
 
-### Running the docker image locally
+1. Clone the repo
+
+
+2. Building docker image
+```
+docker build -t ace-est-fitness-and-gym .
+```
+
+3. Running the docker image locally
+```
 docker run -p 8080:8080 ace-est-fitness-and-gym
+```
+
+4. Access the webpage using gollowing url
+    http://127.0.0.1:8080/
