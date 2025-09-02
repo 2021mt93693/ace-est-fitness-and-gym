@@ -76,7 +76,7 @@ Open your browser and go to: [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
 
 The repository uses GitHub Actions for CI/CD automation. The following jobs are included in the workflow:
 
-- **Unit Tests**: Installs dependencies, lints code, and runs unit tests using pytest.
+- **Unit Tests**: Installs dependencies, lints code, runs unit tests using pytest, prints coverage summary in logs, and uploads the coverage report (`coverage.xml`) as a workflow artifact.
 - **Docker Build**: Builds the Docker image for the application after tests pass.
 - **Tag Release**: Creates and pushes a git tag based on the version file, only on the main branch (requires a PAT secret named `GH_TOKEN`).
 
