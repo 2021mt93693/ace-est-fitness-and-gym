@@ -1,4 +1,4 @@
-name: "ace-est-fitness-and-gym: Unit Tests and Docker Build"
+name: "ace-est-fitness-and-gym"
 
 on:
   push:
