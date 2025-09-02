@@ -7,8 +7,7 @@ on:
     branches: [ "main" ]
 
 permissions:
-  contents: write
-  pages: write 
+  contents: read
   id-token: write
 
 jobs:
@@ -53,12 +52,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Read version and create tag
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           VERSION=$(cat build.version)
           git config --global user.name "${GITHUB_ACTOR}"
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git tag "v$VERSION"
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
           git push origin "v$VERSION"
