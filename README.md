@@ -2,12 +2,12 @@
 An automated application that demonstrates core functionalities pertinent to a fitness and gym management system.
 
 ## Python installation & local setup (for macOS)
-### Install pyenv
+1. Install pyenv
 ```
 brew install pyenv
 ```
 
-### Add these lines (in this exact order) in ~/.zshrc:
+2. Add these lines (in this exact order) in ~/.zshrc:
 ```
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
@@ -15,25 +15,25 @@ eval "$(pyenv init -)"
 eval "$(pyenv init --path)"
 ```
 
-### Reload shell
+3.### Reload shell
 ```
 source ~/.zshrc
 ```
 
-### Install Python
+4. Install Python
 ```
 pyenv install 3.13.0
 pyenv global 3.13.0
 ```
 
-### Setting Vitual Environment for python runtime
+5. Setting Vitual Environment for python runtime
 ```
 mkdir .env
 python3 -m venv .env
 source .env/bin/activate
 ```
 
-### Intall required python libraries
+6. Intall required python libraries
 ```
 pip install -r requirements.txt
 ```
@@ -57,18 +57,15 @@ rm -rf __pycache__ */__pycache__ .pytest_cache */.pytest_cache
 
 ## Building and running the application as a Docker image locally
 
-1. Clone the repo
-
-
-2. Building docker image
+1. Building docker image
 ```
 docker build -t ace-est-fitness-and-gym .
 ```
 
-3. Running the docker image locally
+2. Running the docker image locally
 ```
 docker run -p 8080:8080 ace-est-fitness-and-gym
 ```
 
-4. Access the webpage using gollowing url
+3. Access the webpage using following url
     http://127.0.0.1:8080/
