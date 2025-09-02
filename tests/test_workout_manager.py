@@ -1,5 +1,5 @@
 import pytest
-from src.ACEest_Fitness import WorkoutManager
+from src.app import WorkoutManager
 
 @pytest.fixture
 def manager():
