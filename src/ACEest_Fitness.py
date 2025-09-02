@@ -1,3 +1,19 @@
+
+# Business logic separated from GUI
+class WorkoutManager:
+    def __init__(self):
+        self.workouts = []
+
+    def add_workout(self, workout, duration):
+        if not workout or duration is None:
+            raise ValueError("Workout and duration are required.")
+        if not isinstance(duration, int):
+            raise TypeError("Duration must be an integer.")
+        self.workouts.append({"workout": workout, "duration": duration})
+
+    def get_workouts(self):
+        return self.workouts.copy()
+
 import tkinter as tk
 from tkinter import messagebox
 
@@ -6,7 +22,7 @@ class FitnessTrackerApp:
         self.master = master
         master.title("ACEestFitness and Gym")
 
-        self.workouts = []
+        self.manager = WorkoutManager()
 
         # Labels and Entries for adding workouts
         self.workout_label = tk.Label(master, text="Workout:")
@@ -36,20 +52,21 @@ class FitnessTrackerApp:
 
         try:
             duration = int(duration_str)
-            self.workouts.append({"workout": workout, "duration": duration})
+            self.manager.add_workout(workout, duration)
             messagebox.showinfo("Success", f"'{workout}' added successfully!")
             self.workout_entry.delete(0, tk.END)
             self.duration_entry.delete(0, tk.END)
-        except ValueError:
+        except (ValueError, TypeError):
             messagebox.showerror("Error", "Duration must be a number.")
 
     def view_workouts(self):
-        if not self.workouts:
+        workouts = self.manager.get_workouts()
+        if not workouts:
             messagebox.showinfo("Workouts", "No workouts logged yet.")
             return
 
         workout_list = "Logged Workouts:\n"
-        for i, entry in enumerate(self.workouts):
+        for i, entry in enumerate(workouts):
             workout_list += f"{i+1}. {entry['workout']} - {entry['duration']} minutes\n"
         messagebox.showinfo("Workouts", workout_list)
 
