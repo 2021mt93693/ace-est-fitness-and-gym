@@ -72,19 +72,156 @@ docker run -p 8080:8080 ace-est-fitness-and-gym
 Open your browser and go to: [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
 
 
-## GitHub Actions Overview
+## CI/CD Pipeline
 
-The repository uses GitHub Actions for CI/CD automation. The following jobs are included in the workflow:
+The repository supports both GitHub Actions and Jenkins for CI/CD automation.
 
+### GitHub Actions (Legacy)
 - **Unit Tests**: Installs dependencies, lints code, runs unit tests using pytest, prints coverage summary in logs, and uploads the coverage report (`coverage.xml`) as a workflow artifact.
 - **Docker Build**: Builds the Docker image for the application after tests pass.
 - **Tag Release**: Creates and pushes a git tag based on the version file, only on the main branch (requires a PAT secret named `GH_TOKEN`).
 
-These jobs ensure code quality, build automation, and versioning for releases.
+### Jenkins Pipeline (Current)
+The `Jenkinsfile` defines a pipeline with the following stages:
+- **Setup Python**: Installs Python dependencies and tools
+- **Lint**: Runs code quality checks with flake8
+- **Unit Tests**: Executes tests with coverage reporting
+- **Docker Build**: Builds Docker image (main branch only)
+- **Tag Release**: Creates and pushes git tags (main branch only)
 
+To use Jenkins:
+1. Install Jenkins and required plugins (Git, Pipeline, Docker)
+2. Create a new Pipeline job pointing to this repository
+3. Configure Git credentials for tag pushing
+
+These pipelines ensure code quality, build automation, and versioning for releases.
+
+
+## Jenkins Setup on GCP (Cheapest VM)
+
+### 1. Create a VM Instance
+```sh
+gcloud compute instances create jenkins-vm \
+    --zone=us-central1-a \
+    --machine-type=e2-micro \
+    --boot-disk-size=30 \
+    --image-family=ubuntu-2404-lts-amd64 \
+    --image-project=ubuntu-os-cloud \
+    --tags=jenkins-server
+```
+
+### 2. Open Jenkins Port (8080)
+```sh
+gcloud compute firewall-rules create allow-jenkins \
+    --allow tcp:8080 \
+    --source-ranges 0.0.0.0/0 \
+    --target-tags jenkins-server
+```
+
+### 3. SSH into the VM and Install Jenkins
+```sh
+gcloud compute ssh jenkins-vm --zone=us-central1-a
+
+# On the VM:
+sudo apt-get update
+sudo apt-get install -y openjdk-17-jdk wget gnupg
+
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt-get update
+
+sudo apt-get install -y jenkins
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+sudo apt-get install -y docker.io
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+```
+
+### 4. Get Jenkins Initial Admin Password
+```sh
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+### 5. Access Jenkins
+Open your browser and go to: `http://34.63.203.98:8080/`
+(Find the external IP in the GCP VM details)
+
+User - jenkins
+Password - password
+
+---
+
+## Integrating Your Project with Jenkins
+
+### 1. Initial Jenkins Setup
+1. Access Jenkins web interface at `http://<EXTERNAL_IP>:8080/`
+2. Enter the initial admin password from step 4
+3. Install suggested plugins
+4. Create an admin user
+
+### 2. Install Required Plugins
+Go to **Manage Jenkins > Plugins > Available Plugins** and install:
+- **Git Plugin** (usually pre-installed)
+- **Pipeline Plugin** (usually pre-installed)
+- **Docker Pipeline Plugin**
+- **GitHub Integration Plugin**
+
+### 3. Create a New Pipeline Job
+1. Click **New Item**
+2. Enter project name: `ace-est-fitness-and-gym`
+3. Select **Pipeline** and click **OK**
+
+### 4. Configure Pipeline
+In the pipeline configuration:
+
+**General Tab:**
+- ✅ Check **GitHub project**
+- Project URL: `https://github.com/2021mt93693/ace-est-fitness-and-gym`
+
+**Build Triggers:**
+- ✅ Check **GitHub hook trigger for GITScm polling**
+
+**Pipeline Tab:**
+- Definition: **Pipeline script from SCM**
+- SCM: **Git**
+- Repository URL: `https://github.com/2021mt93693/ace-est-fitness-and-gym.git`
+- Branch: `*/main` (or your default branch)
+- Script Path: `Jenkinsfile`
+
+### 5. Configure GitHub Webhook (Optional)
+To trigger builds automatically on code push:
+1. Go to your GitHub repository settings
+2. Navigate to **Webhooks**
+3. Add webhook: `http://<JENKINS_IP>:8080/github-webhook/`
+4. Select **Just the push event**
+
+### 6. Install Python and Dependencies on Jenkins VM
+SSH back into your Jenkins VM and install Python:
+```sh
+gcloud compute ssh jenkins-vm --zone=us-central1-a
+
+# Install Python 3.13
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv
+```
+
+### 7. Run Your First Build
+1. Go to your pipeline job
+2. Click **Build Now**
+3. Monitor the build progress in **Console Output**
+
+The pipeline will execute the stages defined in your `Jenkinsfile`:
+- Setup Python environment
+- Install dependencies
+- Run linting with flake8
+- Execute unit tests with coverage
+- Build Docker image
+- Create release tags (on main branch) 
 
 ## Project Structure
-
 ```
 ace-est-fitness-and-gym/
 ├── src/
