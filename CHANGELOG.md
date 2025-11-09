@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [2.0.0] - 2025-11-10
+- Assignment 2 :: Changes 
 - Added comprehensive CHANGELOG.md documentation
 - Integrated Jenkins CI/CD pipeline
 
@@ -20,4 +21,5 @@ All notable changes to this project will be documented in this file.
 - Added unit tests
 
 ## [1.0.0] - 2025-09-03
+- Assignment 1 :: changes
 - Initial release with Flask workout management app

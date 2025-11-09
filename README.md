@@ -138,6 +138,10 @@ sudo systemctl start jenkins
 sudo apt-get install -y docker.io
 sudo usermod -aG docker jenkins
 sudo systemctl restart jenkins
+
+# Install Python 3.13
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv
 ```
 
 ### 4. Get Jenkins Initial Admin Password
@@ -150,76 +154,7 @@ Open your browser and go to: `http://34.63.203.98:8080/`
 (Find the external IP in the GCP VM details)
 
 User - jenkins
-Password - password
-
----
-
-## Integrating Your Project with Jenkins
-
-### 1. Initial Jenkins Setup
-1. Access Jenkins web interface at `http://<EXTERNAL_IP>:8080/`
-2. Enter the initial admin password from step 4
-3. Install suggested plugins
-4. Create an admin user
-
-### 2. Install Required Plugins
-Go to **Manage Jenkins > Plugins > Available Plugins** and install:
-- **Git Plugin** (usually pre-installed)
-- **Pipeline Plugin** (usually pre-installed)
-- **Docker Pipeline Plugin**
-- **GitHub Integration Plugin**
-
-### 3. Create a New Pipeline Job
-1. Click **New Item**
-2. Enter project name: `ace-est-fitness-and-gym`
-3. Select **Pipeline** and click **OK**
-
-### 4. Configure Pipeline
-In the pipeline configuration:
-
-**General Tab:**
-- ✅ Check **GitHub project**
-- Project URL: `https://github.com/2021mt93693/ace-est-fitness-and-gym`
-
-**Build Triggers:**
-- ✅ Check **GitHub hook trigger for GITScm polling**
-
-**Pipeline Tab:**
-- Definition: **Pipeline script from SCM**
-- SCM: **Git**
-- Repository URL: `https://github.com/2021mt93693/ace-est-fitness-and-gym.git`
-- Branch: `*/main` (or your default branch)
-- Script Path: `Jenkinsfile`
-
-### 5. Configure GitHub Webhook (Optional)
-To trigger builds automatically on code push:
-1. Go to your GitHub repository settings
-2. Navigate to **Webhooks**
-3. Add webhook: `http://<JENKINS_IP>:8080/github-webhook/`
-4. Select **Just the push event**
-
-### 6. Install Python and Dependencies on Jenkins VM
-SSH back into your Jenkins VM and install Python:
-```sh
-gcloud compute ssh jenkins-vm --zone=us-central1-a
-
-# Install Python 3.13
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv
-```
-
-### 7. Run Your First Build
-1. Go to your pipeline job
-2. Click **Build Now**
-3. Monitor the build progress in **Console Output**
-
-The pipeline will execute the stages defined in your `Jenkinsfile`:
-- Setup Python environment
-- Install dependencies
-- Run linting with flake8
-- Execute unit tests with coverage
-- Build Docker image
-- Create release tags (on main branch) 
+Password - password 
 
 ## Project Structure
 ```
