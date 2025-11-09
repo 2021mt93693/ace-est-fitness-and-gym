@@ -17,7 +17,9 @@ pipeline {
             steps {
                 sh '''
                     python3 --version
-                    python3 -m pip install --upgrade pip
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    python -m pip install --upgrade pip
                     pip install flake8 pytest coverage pytest-cov
                     if [ -f requirements.txt ]; then
                         pip install -r requirements.txt
@@ -29,6 +31,7 @@ pipeline {
         stage('Lint') {
             steps {
                 sh '''
+                    . venv/bin/activate
                     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
                     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
                 '''
@@ -38,6 +41,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
+                    . venv/bin/activate
                     export PYTHONPATH=$PYTHONPATH:$(pwd)/src
                     pytest --cov=src --cov-report=xml --cov-report=term tests/
                 '''
@@ -51,7 +55,7 @@ pipeline {
                     archiveArtifacts artifacts: 'coverage.xml', fingerprint: true
                     
                     // Display coverage summary
-                    sh 'coverage report'
+                    sh '. venv/bin/activate && coverage report'
                 }
             }
         }
