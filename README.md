@@ -72,19 +72,91 @@ docker run -p 8080:8080 ace-est-fitness-and-gym
 Open your browser and go to: [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
 
 
-## GitHub Actions Overview
+## CI/CD Pipeline
 
-The repository uses GitHub Actions for CI/CD automation. The following jobs are included in the workflow:
+The repository supports both GitHub Actions and Jenkins for CI/CD automation.
 
+### GitHub Actions (Legacy)
 - **Unit Tests**: Installs dependencies, lints code, runs unit tests using pytest, prints coverage summary in logs, and uploads the coverage report (`coverage.xml`) as a workflow artifact.
 - **Docker Build**: Builds the Docker image for the application after tests pass.
 - **Tag Release**: Creates and pushes a git tag based on the version file, only on the main branch (requires a PAT secret named `GH_TOKEN`).
 
-These jobs ensure code quality, build automation, and versioning for releases.
+### Jenkins Pipeline (Current)
+The `Jenkinsfile` defines a pipeline with the following stages:
+- **Setup Python**: Installs Python dependencies and tools
+- **Lint**: Runs code quality checks with flake8
+- **Unit Tests**: Executes tests with coverage reporting
+- **Docker Build**: Builds Docker image (main branch only)
+- **Tag Release**: Creates and pushes git tags (main branch only)
 
+To use Jenkins:
+1. Install Jenkins and required plugins (Git, Pipeline, Docker)
+2. Create a new Pipeline job pointing to this repository
+3. Configure Git credentials for tag pushing
+
+These pipelines ensure code quality, build automation, and versioning for releases.
+
+
+## Jenkins Setup on GCP (Cheapest VM)
+
+### 1. Create a VM Instance
+```sh
+gcloud compute instances create jenkins-vm \
+    --zone=us-central1-a \
+    --machine-type=e2-micro \
+    --boot-disk-size=30 \
+    --image-family=ubuntu-2404-lts-amd64 \
+    --image-project=ubuntu-os-cloud \
+    --tags=jenkins-server
+```
+
+### 2. Open Jenkins Port (8080)
+```sh
+gcloud compute firewall-rules create allow-jenkins \
+    --allow tcp:8080 \
+    --source-ranges 0.0.0.0/0 \
+    --target-tags jenkins-server
+```
+
+### 3. SSH into the VM and Install Jenkins
+```sh
+gcloud compute ssh jenkins-vm --zone=us-central1-a
+
+# On the VM:
+sudo apt-get update
+sudo apt-get install -y openjdk-17-jdk wget gnupg
+
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt-get update
+
+sudo apt-get install -y jenkins
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+sudo apt-get install -y docker.io
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+
+# Install Python 3.13
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv
+```
+
+### 4. Get Jenkins Initial Admin Password
+```sh
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+### 5. Access Jenkins
+Open your browser and go to: `http://34.63.203.98:8080/`
+(Find the external IP in the GCP VM details)
+
+User - jenkins
+Password - password 
 
 ## Project Structure
-
 ```
 ace-est-fitness-and-gym/
 ├── src/
