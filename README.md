@@ -96,65 +96,30 @@ To use Jenkins:
 
 These pipelines ensure code quality, build automation, and versioning for releases.
 
-
-## Jenkins Setup on GCP (Cheapest VM)
-
-### 1. Create a VM Instance
-```sh
-gcloud compute instances create jenkins-vm \
-    --zone=us-central1-a \
-    --machine-type=e2-micro \
-    --boot-disk-size=30 \
-    --image-family=ubuntu-2404-lts-amd64 \
-    --image-project=ubuntu-os-cloud \
-    --tags=jenkins-server
+## K8s cluster creation & Jenkins Setup on GCP
+**Run the following command to create k8s cluster and deploy jenkins**
+```sh 
+sh infrastructure/terraform/deploy.sh apply
 ```
 
-### 2. Open Jenkins Port (8080)
+**Check status**
 ```sh
-gcloud compute firewall-rules create allow-jenkins \
-    --allow tcp:8080 \
-    --source-ranges 0.0.0.0/0 \
-    --target-tags jenkins-server
+sh infrastructure/terraform/deploy.sh show
 ```
 
-### 3. SSH into the VM and Install Jenkins
+**Get access info**
 ```sh
-gcloud compute ssh jenkins-vm --zone=us-central1-a
-
-# On the VM:
-sudo apt-get update
-sudo apt-get install -y openjdk-17-jdk wget gnupg
-
-sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
-  /etc/apt/sources.list.d/jenkins.list > /dev/null
-sudo apt-get update
-
-sudo apt-get install -y jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-sudo apt-get install -y docker.io
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
-
-# Install Python 3.13
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv
+sh infrastructure/terraform/deploy.sh access
 ```
 
-### 4. Get Jenkins Initial Admin Password
+**Clean up everything**
 ```sh
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+sh infrastructure/terraform/deploy.sh destroy
 ```
 
-### 5. Access Jenkins
-Open your browser and go to: `http://34.63.203.98:8080/`
-(Find the external IP in the GCP VM details)
-
-User - jenkins
-Password - password 
+**Access Information**
+Jenkins: http://34.46.27.216
+Application: http://34.135.137.217 (after deployment)
 
 ## Project Structure
 ```

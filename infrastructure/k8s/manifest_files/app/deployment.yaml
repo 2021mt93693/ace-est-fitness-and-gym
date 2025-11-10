@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ace-fitness-app
+  namespace: ace-fitness
+  labels:
+    app: ace-fitness-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ace-fitness-app
+  template:
+    metadata:
+      labels:
+        app: ace-fitness-app
+    spec:
+      containers:
+      - name: ace-fitness-app
+        image: ace-est-fitness-and-gym:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: PYTHONPATH
+          value: "/app"
+        - name: FLASK_ENV
+          value: "production"
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
