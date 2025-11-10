@@ -4,6 +4,12 @@ pipeline {
     environment {
         PYTHONPATH = "${WORKSPACE}/src"
         DOCKER_IMAGE = 'ace-est-fitness-and-gym'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        GCP_PROJECT_ID = 'itd-2021mt93693'  // Your project ID
+        GCP_REGION = 'us-central1'
+        ARTIFACT_REGISTRY_REPO = 'ace-fitness-repo'
+        K8S_NAMESPACE = 'ace-fitness'
+        GCP_SERVICE_ACCOUNT_KEY = credentials('gcp-service-account-key')  // Add this credential in Jenkins
     }
     
     stages {
@@ -60,16 +66,66 @@ pipeline {
             }
         }
         
-        stage('Docker Build') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'master'
-                }
-            }
+        stage('GCP Authentication') {
             steps {
                 script {
-                    docker.build("${DOCKER_IMAGE}")
+                    // Authenticate with GCP
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GCP_SERVICE_ACCOUNT_KEY
+                        gcloud config set project $GCP_PROJECT_ID
+                        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+                        
+                        # Configure kubectl to connect to the GKE cluster
+                        gcloud container clusters get-credentials itd-cluster --zone=us-central1-a --project=$GCP_PROJECT_ID
+                    '''
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                script {
+                    def imageTag = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    
+                    // Build Docker image
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                    sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${imageTag}"
+                    
+                    // Push to Artifact Registry
+                    sh "docker push ${imageTag}"
+                    
+                    // Update deployment with new image
+                    env.DOCKER_IMAGE_FULL = imageTag
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    // Create namespace if it doesn't exist (though Terraform should have created it)
+                    sh """
+                        kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                        
+                        # Apply application manifests if first deployment
+                        if ! kubectl get deployment ace-fitness-app -n ${K8S_NAMESPACE} 2>/dev/null; then
+                            echo "First deployment - applying deployment and ingress manifests"
+                            kubectl apply -f infrastructure/k8s/manifest_files/app/deployment.yaml
+                            kubectl apply -f infrastructure/k8s/manifest_files/app/ingress.yaml
+                        fi
+                        
+                        # Update the deployment with the new image
+                        kubectl set image deployment/ace-fitness-app ace-fitness-app=${env.DOCKER_IMAGE_FULL} -n ${K8S_NAMESPACE}
+                        kubectl rollout status deployment/ace-fitness-app -n ${K8S_NAMESPACE} --timeout=300s
+                        
+                        # Verify deployment
+                        kubectl get pods -n ${K8S_NAMESPACE}
+                        kubectl get services -n ${K8S_NAMESPACE}
+                        
+                        # Show access information
+                        APP_IP=\$(kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+                        echo "Application will be accessible at: http://\${APP_IP}"
+                    """
                 }
             }
         }
