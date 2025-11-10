@@ -2,10 +2,8 @@ pipeline {
     agent any
     
     triggers {
-        // Poll SCM every 5 minutes as backup
-        pollSCM('H/5 * * * *')
-        // GitHub webhook (requires GitHub plugin configuration)
-        githubPush()
+        // Poll SCM every 2 minutes to detect changes
+        pollSCM('H/2 * * * *')
     }
     
     environment {
