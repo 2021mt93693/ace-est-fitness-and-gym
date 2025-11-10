@@ -6,6 +6,11 @@ pipeline {
         pollSCM('H/2 * * * *')
     }
     
+    tools {
+        // Ensure Docker is available
+        dockerTool 'docker'
+    }
+    
     environment {
         PYTHONPATH = "${WORKSPACE}/src"
         DOCKER_IMAGE = 'ace-est-fitness-and-gym'
@@ -14,7 +19,12 @@ pipeline {
         GCP_REGION = 'us-central1'
         ARTIFACT_REGISTRY_REPO = 'ace-fitness-repo'
         K8S_NAMESPACE = 'ace-fitness'
+        GKE_CLUSTER_NAME = 'ace-fitness-cluster'
         GCP_SERVICE_ACCOUNT_KEY = credentials('gcp-service-account-key')  // Add this credential in Jenkins
+        
+        // Disable Python bytecode generation for cleaner builds
+        PYTHONDONTWRITEBYTECODE = '1'
+        PYTHONUNBUFFERED = '1'
     }
     
     stages {
@@ -24,192 +34,48 @@ pipeline {
             }
         }
         
-        stage('Code Quality Check') {
+        stage('Setup Python Environment') {
             steps {
-                script {
-                    // Basic file checks
-                    sh '''
-                        echo "Checking project structure..."
-                        ls -la
-                        if [ -f "Dockerfile" ]; then
-                            echo "✓ Dockerfile found"
-                        else
-                            echo "✗ Dockerfile not found"
-                            exit 1
-                        fi
-                        if [ -f "requirements.txt" ]; then
-                            echo "✓ requirements.txt found"
-                        else
-                            echo "✗ requirements.txt not found"
-                            exit 1
-                        fi
-                        if [ -f "src/app.py" ]; then
-                            echo "✓ app.py found"
-                        else
-                            echo "✗ app.py not found" 
-                            exit 1
-                        fi
-                        echo "Project structure validation passed!"
-                    '''
-                }
+                sh '''
+                    python3 -m pip install --upgrade pip
+                    pip install -r requirements.txt
+                '''
             }
         }
         
-        stage('Unit Testing & Linting') {
+        stage('Code Quality Check') {
             steps {
-                script {
-                    sh '''
-                        # Set PATH to include kubectl (if needed)
-                        export PATH=$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
-                        
-                        echo "Running Python linting and unit tests using Python container..."
-                        
-                        # Create a temporary testing job in Kubernetes
-                        kubectl apply -f - <<EOF
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: python-test-${BUILD_NUMBER}
-  namespace: jenkins
-spec:
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-      - name: python-tester
-        image: python:3.9-slim
-        command: ["/bin/bash"]
-        args:
-        - "-c"
-        - |
-          echo "Installing dependencies..."
-          pip install --upgrade pip
-          pip install flake8 pytest coverage pytest-cov
-          
-          echo "Installing project requirements..."
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-          
-          echo "Running linting..."
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Critical linting issues found"
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || echo "Style issues found"
-          
-          echo "Running unit tests..."
-          export PYTHONPATH=/workspace/src
-          pytest --cov=src --cov-report=xml --cov-report=term tests/ || echo "Tests completed with issues"
-          
-          echo "Python testing completed!"
-        workingDir: /workspace
-        volumeMounts:
-        - name: source-code
-          mountPath: /workspace
-      initContainers:
-      - name: git-clone
-        image: alpine/git:latest
-        command: ["/bin/sh"]
-        args:
-        - "-c"
-        - "git clone https://github.com/2021mt93693/ace-est-fitness-and-gym.git /workspace && cd /workspace && git checkout FEATURE-JENKINS"
-        volumeMounts:
-        - name: source-code
-          mountPath: /workspace
-      volumes:
-      - name: source-code
-        emptyDir: {}
-EOF
-                        
-                        # Wait for job completion
-                        echo "Waiting for testing job to complete..."
-                        kubectl wait --for=condition=complete job/python-test-${BUILD_NUMBER} -n jenkins --timeout=300s || echo "Testing timeout"
-                        
-                        # Show test results
-                        echo "=== Test Results ==="
-                        kubectl logs job/python-test-${BUILD_NUMBER} -n jenkins -c python-tester || echo "Could not retrieve test logs"
-                        
-                        # Clean up test job (but allow failure for debugging)
-                        kubectl delete job python-test-${BUILD_NUMBER} -n jenkins --ignore-not-found=true || echo "Cleanup attempted"
-                        
-                        echo "Unit testing stage completed!"
-                    '''
-                }
+                sh '''
+                    echo "Running code quality checks..."
+                    flake8 src/ --max-line-length=120 --exclude=__pycache__ || true
+                '''
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                sh '''
+                    echo "Running unit tests..."
+                    cd ${WORKSPACE}
+                    python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html
+                '''
             }
             post {
                 always {
-                    script {
-                        // Archive any test artifacts that might exist
-                        sh 'echo "Test stage completed"'
-                    }
+                    publishTestResults testResultsPattern: 'test-results.xml', allowEmptyResults: true
+                    publishCoverage adapters: [coberturaAdapter('coverage.xml')], sourceFileResolver: sourceFiles('STORE_ALL_BUILD')
                 }
             }
         }
         
-        stage('GCP Authentication') {
+        stage('Build Version') {
             steps {
                 script {
-                    sh '''
-                        echo "Setting up GCP and Kubernetes tools..."
-                        
-                        # Check if running as root (needed for package installation)
-                        if [ "$EUID" -ne 0 ]; then
-                            echo "Not running as root, trying alternative installation methods..."
-                        fi
-                        
-                        # Try to install gcloud CLI if not present (may fail due to permissions)
-                        if ! command -v gcloud &> /dev/null; then
-                            echo "gcloud CLI not found, attempting installation..."
-                            
-                            # Try snap install first (if available)
-                            if command -v snap &> /dev/null; then
-                                snap install google-cloud-sdk --classic || echo "Snap install failed"
-                            fi
-                            
-                            # If still not available, download binary
-                            if ! command -v gcloud &> /dev/null; then
-                                echo "Downloading gcloud SDK..."
-                                cd /tmp
-                                curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-450.0.0-linux-x86_64.tar.gz
-                                tar -xzf google-cloud-sdk-450.0.0-linux-x86_64.tar.gz
-                                export PATH=$PATH:/tmp/google-cloud-sdk/bin
-                                cd -
-                            fi
-                        fi
-                        
-                        # Install kubectl if not present
-                        if ! command -v kubectl &> /dev/null; then
-                            echo "Installing kubectl..."
-                            curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
-                            chmod +x kubectl
-                            mkdir -p ~/.local/bin && mv kubectl ~/.local/bin/
-                            export PATH=$PATH:~/.local/bin
-                        fi
-                        
-                        # Verify tools are available
-                        echo "Checking tool availability..."
-                        gcloud version || echo "gcloud not available"
-                        kubectl version --client || echo "kubectl not available"
-                        docker --version || echo "docker not available"
-                        
-                        # If we have gcloud, authenticate
-                        if command -v gcloud &> /dev/null; then
-                            echo "Authenticating with GCP..."
-                            gcloud auth activate-service-account --key-file=$GCP_SERVICE_ACCOUNT_KEY
-                            gcloud config set project $GCP_PROJECT_ID
-                            gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
-                            
-                            # Install GKE auth plugin
-                            echo "Installing GKE auth plugin..."
-                            gcloud components install gke-gcloud-auth-plugin --quiet || echo "GKE auth plugin installation attempted"
-                            
-                            # Configure kubectl to connect to the GKE cluster
-                            echo "Configuring kubectl..."
-                            gcloud container clusters get-credentials itd-cluster --zone=us-central1-a --project=$GCP_PROJECT_ID
-                        else
-                            echo "WARNING: gcloud CLI not available, will try manual configuration"
-                        fi
-                        
-                        echo "GCP authentication completed!"
-                    '''
+                    env.VERSION = readFile('build.version').trim()
+                    env.FULL_IMAGE_NAME = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER}"
+                    env.LATEST_IMAGE_NAME = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:latest"
+                    echo "Building version: ${env.VERSION}"
+                    echo "Full image name: ${env.FULL_IMAGE_NAME}"
                 }
             }
         }
@@ -219,110 +85,137 @@ EOF
                 script {
                     sh '''
                         echo "Building Docker image..."
-                        
-                        # Read version from build.version file
-                        VERSION=$(cat build.version)
-                        echo "Building version: $VERSION"
-                        
-                        # Build the Docker image with multiple tags
-                        docker build -t ${DOCKER_IMAGE}:${VERSION} \
-                                    -t ${DOCKER_IMAGE}:latest \
-                                    -t ${DOCKER_IMAGE}:build-${BUILD_NUMBER} .
-                        
-                        # Tag for GCP Artifact Registry
-                        docker tag ${DOCKER_IMAGE}:${VERSION} ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${VERSION}
-                        docker tag ${DOCKER_IMAGE}:latest ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:latest
-                        
-                        # Set environment variable for deployment
-                        echo "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${VERSION}" > docker_image_full.txt
-                        
-                        echo "Docker build completed successfully!"
+                        docker build -t ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} .
+                        docker tag ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} ${FULL_IMAGE_NAME}
+                        docker tag ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} ${LATEST_IMAGE_NAME}
                     '''
-                    
-                    // Store the full image name for deployment
-                    env.DOCKER_IMAGE_FULL = readFile('docker_image_full.txt').trim()
-                    echo "Full Docker image: ${env.DOCKER_IMAGE_FULL}"
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                script {
+                    sh '''
+                        echo "Running basic security scan..."
+                        # Simple vulnerability check - can be enhanced with tools like Trivy
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                          aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL \
+                          --no-progress ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
+                    '''
+                }
+            }
+        }
+        
+        stage('Authenticate with GCP') {
+            steps {
+                script {
+                    sh '''
+                        echo "Authenticating with GCP..."
+                        echo "${GCP_SERVICE_ACCOUNT_KEY}" | base64 -d > gcp-key.json
+                        gcloud auth activate-service-account --key-file=gcp-key.json
+                        gcloud config set project ${GCP_PROJECT_ID}
+                        
+                        # Configure Docker to use gcloud as credential helper
+                        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+                        
+                        # Get GKE credentials
+                        gcloud container clusters get-credentials ${GKE_CLUSTER_NAME} --region=${GCP_REGION} --project=${GCP_PROJECT_ID}
+                    '''
+                }
+            }
+            post {
+                always {
+                    sh 'rm -f gcp-key.json'
                 }
             }
         }
         
         stage('Push to Artifact Registry') {
             steps {
+                sh '''
+                    echo "Pushing image to Google Artifact Registry..."
+                    docker push ${FULL_IMAGE_NAME}
+                    docker push ${LATEST_IMAGE_NAME}
+                '''
+            }
+        }
+        
+        stage('Update Kubernetes Manifests') {
+            steps {
                 script {
                     sh '''
-                        echo "Pushing Docker image to GCP Artifact Registry..."
+                        echo "Updating Kubernetes deployment manifest..."
+                        # Update the image in deployment.yaml
+                        sed -i "s|image: ace-est-fitness-and-gym:latest|image: ${FULL_IMAGE_NAME}|g" infrastructure/k8s/manifest_files/app/deployment.yaml
                         
-                        # Set PATH to include gcloud
-                        export PATH=$PATH:/tmp/google-cloud-sdk/bin
-                        
-                        VERSION=$(cat build.version)
-                        
-                        # Push images to Artifact Registry
-                        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${VERSION}
-                        docker push ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:latest
-                        
-                        echo "Docker image pushed successfully!"
+                        # Show the updated manifest
+                        echo "Updated deployment.yaml:"
+                        cat infrastructure/k8s/manifest_files/app/deployment.yaml
                     '''
                 }
             }
         }
         
-        
-        
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    sh """
-                        # Set PATH to include gcloud and kubectl
-                        export PATH=\$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
+                    sh '''
+                        echo "Deploying to Kubernetes cluster..."
                         
                         # Create namespace if it doesn't exist
                         kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                         
-                        # Apply service first (if it doesn't exist)
-                        if ! kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} 2>/dev/null; then
-                            echo "Deploying service..."
-                            kubectl apply -f infrastructure/k8s/manifest_files/app/service.yaml
-                        fi
+                        # Apply all Kubernetes manifests
+                        kubectl apply -f infrastructure/k8s/manifest_files/app/ -n ${K8S_NAMESPACE}
                         
-                        # Apply or update deployment
-                        if ! kubectl get deployment ace-fitness-app -n ${K8S_NAMESPACE} 2>/dev/null; then
-                            echo "First deployment - applying deployment and ingress manifests"
-                            # Update the deployment.yaml to use the new image before applying
-                            sed -i "s|image: ace-est-fitness-and-gym:latest|image: ${env.DOCKER_IMAGE_FULL}|" infrastructure/k8s/manifest_files/app/deployment.yaml
-                            kubectl apply -f infrastructure/k8s/manifest_files/app/deployment.yaml
-                            kubectl apply -f infrastructure/k8s/manifest_files/app/ingress.yaml
-                        else
-                            echo "Updating existing deployment with new image"
-                            # Update the deployment with the new image
-                            kubectl set image deployment/ace-fitness-app ace-fitness-app=${env.DOCKER_IMAGE_FULL} -n ${K8S_NAMESPACE}
-                        fi
-                        
-                        # Wait for rollout to complete
+                        # Wait for deployment to be ready
                         kubectl rollout status deployment/ace-fitness-app -n ${K8S_NAMESPACE} --timeout=300s
                         
-                        # Verify deployment
-                        echo "=== Deployment Status ==="
-                        kubectl get pods -n ${K8S_NAMESPACE}
+                        # Get deployment status
+                        kubectl get deployments -n ${K8S_NAMESPACE}
                         kubectl get services -n ${K8S_NAMESPACE}
-                        kubectl get ingress -n ${K8S_NAMESPACE}
+                        kubectl get pods -n ${K8S_NAMESPACE}
+                    '''
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                script {
+                    sh '''
+                        echo "Performing health check..."
                         
-                        # Show access information
-                        echo "=== Access Information ==="
-                        APP_IP=\$(kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
-                        if [ "\$APP_IP" != "pending" ] && [ "\$APP_IP" != "" ]; then
-                            echo "Application is accessible at: http://\${APP_IP}"
+                        # Get the external IP of the service
+                        EXTERNAL_IP=""
+                        echo "Waiting for external IP..."
+                        for i in {1..30}; do
+                            EXTERNAL_IP=$(kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                            if [ ! -z "$EXTERNAL_IP" ]; then
+                                break
+                            fi
+                            echo "Waiting for external IP... ($i/30)"
+                            sleep 10
+                        done
+                        
+                        if [ ! -z "$EXTERNAL_IP" ]; then
+                            echo "External IP: $EXTERNAL_IP"
+                            echo "Testing health endpoint..."
+                            for i in {1..10}; do
+                                if curl -f http://$EXTERNAL_IP/health; then
+                                    echo "Health check passed!"
+                                    break
+                                else
+                                    echo "Health check failed, retrying... ($i/10)"
+                                    sleep 5
+                                fi
+                            done
                         else
-                            echo "LoadBalancer IP is still pending. Please check later with:"
-                            echo "kubectl get service ace-fitness-service -n ${K8S_NAMESPACE}"
+                            echo "Could not get external IP, checking pod health instead..."
+                            kubectl get pods -n ${K8S_NAMESPACE}
                         fi
-                        
-                        # Show ingress information if available
-                        INGRESS_IP=\$(kubectl get ingress -n ${K8S_NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-                        if [ "\$INGRESS_IP" != "" ]; then
-                            echo "Ingress IP: \$INGRESS_IP"
-                        fi
-                    """
+                    '''
                 }
             }
         }
@@ -337,23 +230,60 @@ EOF
                     sh """
                         git config user.name "Jenkins"
                         git config user.email "jenkins@localhost"
-                        git tag "v${version}"
-                        git push origin "v${version}"
+                        git tag "v${version}-${BUILD_NUMBER}"
+                        git push origin "v${version}-${BUILD_NUMBER}"
                     """
                 }
             }
         }
     }
+
     
     post {
         always {
-            cleanWs()
+            script {
+                // Clean up Docker images to save space
+                sh '''
+                    echo "Cleaning up Docker images..."
+                    docker rmi ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
+                    docker system prune -f || true
+                '''
+                
+                // Clean workspace
+                cleanWs()
+                
+                // Archive test results if they exist
+                archiveArtifacts artifacts: 'coverage.xml,htmlcov/**', allowEmptyArchive: true
+            }
         }
         success {
-            echo 'Pipeline succeeded!'
+            script {
+                echo "✅ Pipeline succeeded!"
+                echo "🚀 Application deployed successfully to Kubernetes!"
+                echo "📊 Build Number: ${BUILD_NUMBER}"
+                echo "🏷️  Version: ${env.VERSION ?: 'N/A'}"
+                echo "🐳 Docker Image: ${env.FULL_IMAGE_NAME ?: 'N/A'}"
+                
+                // Send notification (can be customized for Slack, email, etc.)
+                // slackSend channel: '#deployments', 
+                //          color: 'good', 
+                //          message: "✅ ACE Fitness App deployed successfully!\nVersion: ${env.VERSION ?: 'N/A'}\nBuild: ${BUILD_NUMBER}"
+            }
         }
         failure {
-            echo 'Pipeline failed!'
+            script {
+                echo "❌ Pipeline failed!"
+                echo "🔍 Check the logs above for error details"
+                echo "💡 Common issues: Docker build failure, K8s deployment timeout, authentication issues"
+                
+                // Send failure notification
+                // slackSend channel: '#deployments', 
+                //          color: 'danger', 
+                //          message: "❌ ACE Fitness App deployment failed!\nBuild: ${BUILD_NUMBER}\nCheck: ${BUILD_URL}"
+            }
+        }
+        unstable {
+            echo "⚠️  Pipeline completed with warnings!"
         }
     }
 }
