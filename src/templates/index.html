@@ -2,40 +2,167 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ACEestFitness and Gym</title>
+    <title>ACEest Fitness & Gym Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        .nav-tabs .nav-link { color: #007bff; }
+        .nav-tabs .nav-link.active { background-color: #007bff; color: white; }
+        .workout-entry { border-left: 4px solid #007bff; padding-left: 15px; margin-bottom: 10px; }
+        .category-badge { font-size: 0.8em; }
+    </style>
 </head>
 <body class="bg-light">
-    <div class="container mt-5">
-        <h1 class="mb-4">ACEestFitness and Gym</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-        <form method="post" class="mb-4">
-            <div class="mb-3">
-                <label for="workout" class="form-label">Workout</label>
-                <input type="text" class="form-control" id="workout" name="workout" required>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">🏋️ ACEest Fitness & Gym Tracker</h1>
+        
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab">🏋️ Log Workouts</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="chart-tab" data-bs-toggle="tab" data-bs-target="#chart" type="button" role="tab">📊 Workout Chart</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="diet-tab" data-bs-toggle="tab" data-bs-target="#diet" type="button" role="tab">🥗 Diet Chart</button>
+            </li>
+        </ul>
+        
+        <!-- Tab Content -->
+        <div class="tab-content" id="myTabContent">
+            <!-- Log Workouts Tab -->
+            <div class="tab-pane fade show active" id="log" role="tabpanel">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+                
+                <!-- Add Workout Form -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Add New Session</h5>
+                            </div>
+                            <div class="card-body">
+                                <form method="post">
+                                    <div class="mb-3">
+                                        <label for="category" class="form-label">Category</label>
+                                        <select class="form-select" id="category" name="category" required>
+                                            <option value="Warm-up">Warm-up</option>
+                                            <option value="Workout" selected>Workout</option>
+                                            <option value="Cool-down">Cool-down</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="workout" class="form-label">Exercise</label>
+                                        <input type="text" class="form-control" id="workout" name="workout" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="duration" class="form-label">Duration (minutes)</label>
+                                        <input type="number" class="form-control" id="duration" name="duration" min="1" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-success me-2">Add Session</button>
+                                    <a href="{{ url_for('summary') }}" class="btn btn-primary">View Summary</a>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Logged Workouts -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Recent Sessions</h5>
+                            </div>
+                            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                                {% set has_workouts = false %}
+                                {% for category, sessions in workouts.items() %}
+                                    {% if sessions %}
+                                        {% set has_workouts = true %}
+                                        <h6 class="text-primary mt-3 mb-2">{{ category }}:</h6>
+                                        {% for entry in sessions[-5:] %}
+                                            <div class="workout-entry">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span><strong>{{ entry.exercise }}</strong> - {{ entry.duration }} min</span>
+                                                    <small class="text-muted">{{ entry.timestamp }}</small>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not has_workouts %}
+                                    <p class="text-muted text-center">No sessions logged yet!</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="duration" class="form-label">Duration (minutes)</label>
-                <input type="number" class="form-control" id="duration" name="duration" required>
+            
+            <!-- Workout Chart Tab -->
+            <div class="tab-pane fade" id="chart" role="tabpanel">
+                <h3 class="text-center mb-4">🏋️ Personalized Workout Chart</h3>
+                <div class="row">
+                    {% set chart_data = {
+                        "Warm-up": ["5 min Jog", "Jumping Jacks", "Arm Circles", "Leg Swings", "Dynamic Stretching"],
+                        "Workout": ["Push-ups", "Squats", "Plank", "Lunges", "Burpees", "Crunches"],
+                        "Cool-down": ["Slow Walking", "Static Stretching", "Deep Breathing", "Yoga Poses"]
+                    } %}
+                    {% for category, exercises in chart_data.items() %}
+                        <div class="col-md-4 mb-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">{{ category }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled">
+                                        {% for exercise in exercises %}
+                                            <li class="mb-2"><i class="text-success">•</i> {{ exercise }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary">Add Workout</button>
-        </form>
-        <h2>Logged Workouts</h2>
-        {% if workouts %}
-            <ul class="list-group">
-            {% for entry in workouts %}
-                <li class="list-group-item">{{ entry.workout }} - {{ entry.duration }} minutes</li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>No workouts logged yet.</p>
-        {% endif %}
+            
+            <!-- Diet Chart Tab -->
+            <div class="tab-pane fade" id="diet" role="tabpanel">
+                <h3 class="text-center mb-4">🥗 Best Diet Chart for Fitness Goals</h3>
+                <div class="row">
+                    {% set diet_plans = {
+                        "Weight Loss": ["Oatmeal with Fruits", "Grilled Chicken Salad", "Vegetable Soup", "Brown Rice & Stir-fry Veggies"],
+                        "Muscle Gain": ["Egg Omelet", "Chicken Breast", "Quinoa & Beans", "Protein Shake", "Greek Yogurt with Nuts"],
+                        "Endurance": ["Banana & Peanut Butter", "Whole Grain Pasta", "Sweet Potatoes", "Salmon & Avocado", "Trail Mix"]
+                    } %}
+                    {% for goal, foods in diet_plans.items() %}
+                        <div class="col-md-4 mb-4">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">{{ goal }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled">
+                                        {% for food in foods %}
+                                            <li class="mb-2"><i class="text-primary">•</i> {{ food }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>
