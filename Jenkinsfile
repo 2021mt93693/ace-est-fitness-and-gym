@@ -114,9 +114,13 @@ pipeline {
                             gcloud config set project $GCP_PROJECT_ID
                             gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
                             
-                                                    # Configure kubectl to connect to the GKE cluster
-                        echo "Configuring kubectl..."
-                        gcloud container clusters get-credentials itd-cluster --zone=us-central1-a --project=$GCP_PROJECT_ID
+                            # Install GKE auth plugin
+                            echo "Installing GKE auth plugin..."
+                            gcloud components install gke-gcloud-auth-plugin --quiet || echo "GKE auth plugin installation attempted"
+                            
+                            # Configure kubectl to connect to the GKE cluster
+                            echo "Configuring kubectl..."
+                            gcloud container clusters get-credentials itd-cluster --zone=us-central1-a --project=$GCP_PROJECT_ID
                         else
                             echo "WARNING: gcloud CLI not available, will try manual configuration"
                         fi
@@ -133,9 +137,9 @@ pipeline {
                     sh """
                         echo "Building and pushing Docker image..."
                         
-                        # Check if Docker is available
-                        if command -v docker &> /dev/null; then
-                            echo "Docker found, proceeding with build..."
+                        # Check if Docker daemon is actually accessible
+                        if docker info >/dev/null 2>&1; then
+                            echo "Docker daemon accessible, proceeding with build..."
                             
                             # Build Docker image
                             echo "Building image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
@@ -151,93 +155,59 @@ pipeline {
                             
                             echo "Image pushed successfully: ${imageTag}"
                         else
-                            echo "Docker not available in Jenkins container."
-                            echo "Using kubectl to create a build pod..."
+                            echo "Docker daemon not accessible. Using kubectl to create a build pod..."
                             
-                            # Create a temporary build pod with Docker-in-Docker
+                            # Create a build job using existing jenkins service account
+                            echo "Creating Kaniko build job for Docker image..."
                             kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: docker-build-${BUILD_NUMBER}
   namespace: jenkins
 spec:
-  restartPolicy: Never
-  containers:
-  - name: docker
-    image: docker:dind
-    securityContext:
-      privileged: true
-    env:
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
-    volumeMounts:
-    - name: workspace
-      mountPath: /workspace
-  - name: builder
-    image: google/cloud-sdk:latest
-    command: ["/bin/bash"]
-    args: ["-c", "sleep 3600"]
-    env:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
-    - name: GCP_PROJECT_ID
-      value: "${GCP_PROJECT_ID}"
-    - name: GCP_REGION
-      value: "${GCP_REGION}"
-    - name: ARTIFACT_REGISTRY_REPO
-      value: "${ARTIFACT_REGISTRY_REPO}"
-    - name: DOCKER_IMAGE
-      value: "${DOCKER_IMAGE}"
-    - name: DOCKER_TAG
-      value: "${DOCKER_TAG}"
-    volumeMounts:
-    - name: workspace
-      mountPath: /workspace
-    - name: gcp-key
-      mountPath: /tmp/gcp-key.json
-      subPath: gcp-key.json
-  volumes:
-  - name: workspace
-    emptyDir: {}
-  - name: gcp-key
-    secret:
-      secretName: gcp-service-account-key
+  template:
+    spec:
+      serviceAccountName: jenkins-gke-sa
+      restartPolicy: Never
+      containers:
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+        - "--context=git://github.com/2021mt93693/ace-est-fitness-and-gym.git#refs/heads/FEATURE-JENKINS"
+        - "--destination=${imageTag}"
+        - "--cache=true"
+        - "--cache-repo=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/cache"
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/secrets/google/gcp-key.json
+        volumeMounts:
+        - name: gcp-key
+          mountPath: /var/secrets/google
+          readOnly: true
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-service-account-key
 EOF
                             
-                            # Wait for pod to be ready
-                            echo "Waiting for build pod to be ready..."
-                            kubectl wait --for=condition=Ready pod/docker-build-${BUILD_NUMBER} -n jenkins --timeout=300s
+                            # Wait for job completion
+                            echo "Waiting for build job to complete..."
+                            kubectl wait --for=condition=complete job/docker-build-${BUILD_NUMBER} -n jenkins --timeout=600s
                             
-                            # Copy source code to the pod
-                            echo "Copying source code to build pod..."
-                            kubectl cp . jenkins/docker-build-${BUILD_NUMBER}:/workspace -c builder
+                            # Check if job succeeded
+                            if kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q "True"; then
+                                echo "✅ Docker image built successfully using Kaniko!"
+                            else
+                                echo "❌ Docker build failed"
+                                kubectl logs job/docker-build-${BUILD_NUMBER} -n jenkins
+                                exit 1
+                            fi
                             
-                            # Execute build commands in the pod
-                            echo "Building Docker image in pod..."
-                            kubectl exec docker-build-${BUILD_NUMBER} -n jenkins -c builder -- bash -c "
-                                cd /workspace
-                                gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
-                                gcloud config set project ${GCP_PROJECT_ID}
-                                gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
-                                
-                                # Wait for Docker daemon to start
-                                while ! docker info >/dev/null 2>&1; do
-                                    echo 'Waiting for Docker daemon to start...'
-                                    sleep 1
-                                done
-                                
-                                # Build and push image
-                                docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                                docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${imageTag}
-                                docker push ${imageTag}
-                                echo 'Build completed successfully!'
-                            "
+                            # Clean up build job
+                            kubectl delete job docker-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
                             
-                            # Clean up build pod
-                            kubectl delete pod docker-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
-                            
-                            echo "Image built and pushed using Kubernetes build pod: ${imageTag}"
+                            echo "Image built and pushed using Kaniko: ${imageTag}"
                         fi
                     """
                     
