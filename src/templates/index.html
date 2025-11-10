@@ -2,40 +2,393 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ACEestFitness and Gym</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACEest Fitness & Gym Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .nav-tabs .nav-link.active {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+        .card-custom {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            border-color: #4CAF50;
+        }
+        .btn-primary:hover {
+            background-color: #388E3C;
+            border-color: #388E3C;
+        }
+        .btn-secondary {
+            background-color: #2196F3;
+            border-color: #2196F3;
+        }
+        .btn-secondary:hover {
+            background-color: #1976D2;
+            border-color: #1976D2;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .workout-category {
+            border-left: 4px solid #4CAF50;
+            padding-left: 15px;
+        }
+        .workout-category.warmup {
+            border-color: #2196F3;
+        }
+        .workout-category.cooldown {
+            border-color: #FFC107;
+        }
+        .form-control:focus {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
+        }
+    </style>
 </head>
 <body class="bg-light">
-    <div class="container mt-5">
-        <h1 class="mb-4">ACEestFitness and Gym</h1>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="text-center py-4">
+                    <h1 class="display-4 fw-bold text-success">
+                        <i class="bi bi-heart-pulse"></i> ACEest Fitness & Gym Tracker
+                    </h1>
+                    <p class="lead text-muted">Track your progress with precision</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
+            <div class="row">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' }} alert-dismissible fade show">
+                          {{ message }}
+                          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                      </div>
+                    {% endfor %}
+                </div>
+            </div>
           {% endif %}
         {% endwith %}
-        <form method="post" class="mb-4">
-            <div class="mb-3">
-                <label for="workout" class="form-label">Workout</label>
-                <input type="text" class="form-control" id="workout" name="workout" required>
+
+        <!-- Navigation Tabs -->
+        <div class="row">
+            <div class="col-12">
+                <ul class="nav nav-tabs justify-content-center mb-4" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab">
+                            <i class="bi bi-person-circle"></i> User Profile
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab">
+                            <i class="bi bi-journal-plus"></i> Log Workouts
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="progress-tab" data-bs-toggle="tab" data-bs-target="#progress" type="button" role="tab">
+                            <i class="bi bi-graph-up"></i> Progress Tracker
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">
+                            <i class="bi bi-clipboard-data"></i> Workout Summary
+                        </button>
+                    </li>
+                </ul>
             </div>
-            <div class="mb-3">
-                <label for="duration" class="form-label">Duration (minutes)</label>
-                <input type="number" class="form-control" id="duration" name="duration" required>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            
+            <!-- User Profile Tab -->
+            <div class="tab-pane fade show active" id="profile" role="tabpanel">
+                <div class="row justify-content-center">
+                    <div class="col-md-8 col-lg-6">
+                        <div class="card card-custom">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-person-fill"></i> User Information
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                {% if user_info %}
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <strong>Name:</strong> {{ user_info.name }}
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Regn-ID:</strong> {{ user_info.regn_id }}
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Age:</strong> {{ user_info.age }}
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Gender:</strong> {{ user_info.gender }}
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Height:</strong> {{ user_info.height }} cm
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Weight:</strong> {{ user_info.weight }} kg
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>BMI:</strong> <span class="badge bg-primary">{{ "%.1f"|format(user_info.bmi) }}</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>BMR:</strong> <span class="badge bg-info">{{ "%.0f"|format(user_info.bmr) }} kcal/day</span>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                
+                                <hr>
+                                
+                                <form method="post" action="{{ url_for('save_user_info') }}">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="name" class="form-label">Name</label>
+                                            <input type="text" class="form-control" id="name" name="name" 
+                                                   value="{{ user_info.name if user_info else '' }}" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="regn_id" class="form-label">Registration ID</label>
+                                            <input type="text" class="form-control" id="regn_id" name="regn_id" 
+                                                   value="{{ user_info.regn_id if user_info else '' }}" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="age" class="form-label">Age</label>
+                                            <input type="number" class="form-control" id="age" name="age" min="1" max="120"
+                                                   value="{{ user_info.age if user_info else '' }}" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="gender" class="form-label">Gender</label>
+                                            <select class="form-control" id="gender" name="gender" required>
+                                                <option value="">Select</option>
+                                                <option value="M" {{ 'selected' if user_info and user_info.gender == 'M' }}>Male</option>
+                                                <option value="F" {{ 'selected' if user_info and user_info.gender == 'F' }}>Female</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="height" class="form-label">Height (cm)</label>
+                                            <input type="number" class="form-control" id="height" name="height" min="50" max="250"
+                                                   value="{{ user_info.height if user_info else '' }}" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="weight" class="form-label">Weight (kg)</label>
+                                            <input type="number" class="form-control" id="weight" name="weight" min="20" max="300" step="0.1"
+                                                   value="{{ user_info.weight if user_info else '' }}" required>
+                                        </div>
+                                        <div class="col-12 text-center">
+                                            <button type="submit" class="btn btn-primary btn-lg">
+                                                <i class="bi bi-check-circle"></i> Save User Info
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary">Add Workout</button>
-        </form>
-        <h2>Logged Workouts</h2>
-        {% if workouts %}
-            <ul class="list-group">
-            {% for entry in workouts %}
-                <li class="list-group-item">{{ entry.workout }} - {{ entry.duration }} minutes</li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>No workouts logged yet.</p>
-        {% endif %}
+
+            <!-- Log Workouts Tab -->
+            <div class="tab-pane fade" id="log" role="tabpanel">
+                <div class="row justify-content-center">
+                    <div class="col-md-8 col-lg-6">
+                        <div class="card card-custom">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-plus-circle"></i> Add Workout Session
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form method="post" action="{{ url_for('add_workout') }}">
+                                    <div class="mb-3">
+                                        <label for="category" class="form-label">Workout Category</label>
+                                        <select class="form-control" id="category" name="category" required>
+                                            <option value="Warm-up">🔥 Warm-up</option>
+                                            <option value="Workout" selected>💪 Main Workout</option>
+                                            <option value="Cool-down">❄️ Cool-down</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="exercise" class="form-label">Exercise Name</label>
+                                        <input type="text" class="form-control" id="exercise" name="exercise" 
+                                               placeholder="e.g., Push-ups, Running, Squats" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="duration" class="form-label">Duration (minutes)</label>
+                                        <input type="number" class="form-control" id="duration" name="duration" min="1" required>
+                                    </div>
+                                    <div class="text-center">
+                                        <button type="submit" class="btn btn-success btn-lg">
+                                            <i class="bi bi-check2-circle"></i> Add Session
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Tracker Tab -->
+            <div class="tab-pane fade" id="progress" role="tabpanel">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card card-custom">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-bar-chart"></i> Progress Visualization
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="text-center mb-4">
+                                    <button class="btn btn-outline-primary" onclick="loadChart()">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh Charts
+                                    </button>
+                                    <a href="{{ url_for('export_pdf') }}" class="btn btn-outline-success ms-2">
+                                        <i class="bi bi-download"></i> Export PDF Report
+                                    </a>
+                                </div>
+                                
+                                <!-- Summary Stats -->
+                                {% if summary.total_time > 0 %}
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <div class="card stats-card">
+                                            <div class="card-body text-center">
+                                                <h3>{{ summary.total_time }}</h3>
+                                                <p class="mb-0">Total Minutes</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card stats-card">
+                                            <div class="card-body text-center">
+                                                <h3>{{ "%.0f"|format(summary.total_calories) }}</h3>
+                                                <p class="mb-0">Calories Burned</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card stats-card">
+                                            <div class="card-body text-center">
+                                                <h3>{{ summary.category_totals['Warm-up']['sessions'] + summary.category_totals['Workout']['sessions'] + summary.category_totals['Cool-down']['sessions'] }}</h3>
+                                                <p class="mb-0">Total Sessions</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="text-center">
+                                    <div id="chartContainer">
+                                        <p class="text-muted">Click "Refresh Charts" to view your progress visualization</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Tab -->
+            <div class="tab-pane fade" id="summary" role="tabpanel">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card card-custom">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-clipboard-data"></i> Detailed Workout Summary
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                {% for category, sessions in workouts.items() %}
+                                <div class="workout-category {{ category.lower().replace('-', '') }} mb-4">
+                                    <h4 class="text-capitalize">
+                                        {% if category == 'Warm-up' %}🔥{% elif category == 'Workout' %}💪{% else %}❄️{% endif %}
+                                        {{ category }}
+                                        <small class="text-muted">({{ sessions|length }} sessions)</small>
+                                    </h4>
+                                    {% if sessions %}
+                                        <div class="table-responsive">
+                                            <table class="table table-striped">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Exercise</th>
+                                                        <th>Duration</th>
+                                                        <th>Calories</th>
+                                                        <th>Date/Time</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for session in sessions %}
+                                                    <tr>
+                                                        <td>{{ session.exercise }}</td>
+                                                        <td>{{ session.duration }} min</td>
+                                                        <td>{{ "%.1f"|format(session.calories) }} kcal</td>
+                                                        <td>{{ session.timestamp }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <p class="text-muted">
+                                            <strong>Category Total:</strong> 
+                                            {{ summary.category_totals[category]['time'] }} min, 
+                                            {{ "%.1f"|format(summary.category_totals[category]['calories']) }} calories
+                                        </p>
+                                    {% else %}
+                                        <p class="text-muted">No sessions recorded in this category yet.</p>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadChart() {
+            fetch('/chart')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.chart) {
+                        document.getElementById('chartContainer').innerHTML = 
+                            '<img src="data:image/png;base64,' + data.chart + '" class="img-fluid" alt="Progress Chart">';
+                    } else {
+                        document.getElementById('chartContainer').innerHTML = 
+                            '<p class="text-muted">No workout data available for charting.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading chart:', error);
+                    document.getElementById('chartContainer').innerHTML = 
+                        '<p class="text-danger">Error loading chart. Please try again.</p>';
+                });
+        }
+
+        // Auto-load chart when progress tab is shown
+        document.getElementById('progress-tab').addEventListener('shown.bs.tab', function (e) {
+            loadChart();
+        });
+    </script>
 </body>
 </html>
