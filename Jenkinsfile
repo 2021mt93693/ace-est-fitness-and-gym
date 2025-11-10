@@ -92,9 +92,15 @@ pipeline {
         }
         
         stage('Build Docker Image') {
+            agent {
+                docker {
+                    image 'docker:24-dind'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --privileged'
+                    reuseNode true
+                }
+            }
             steps {
                 script {
-                    // Use docker command directly on the Jenkins agent
                     sh '''
                         echo "Building Docker image..."
                         docker build -t ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} .
@@ -108,6 +114,13 @@ pipeline {
         }
         
         stage('Security Scan') {
+            agent {
+                docker {
+                    image 'docker:24-dind'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --privileged'
+                    reuseNode true
+                }
+            }
             steps {
                 script {
                     sh '''
@@ -155,13 +168,32 @@ pipeline {
         }
         
         stage('Push to Artifact Registry') {
+            agent {
+                docker {
+                    image 'google/cloud-sdk:alpine'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+                    reuseNode true
+                }
+            }
             steps {
-                sh '''
-                    echo "Pushing image to Google Artifact Registry..."
-                    docker push ${FULL_IMAGE_NAME}
-                    docker push ${LATEST_IMAGE_NAME}
-                    echo "Images pushed successfully!"
-                '''
+                script {
+                    sh '''
+                        echo "Authenticating with GCP for Docker push..."
+                        echo "${GCP_SERVICE_ACCOUNT_KEY}" | base64 -d > gcp-key.json
+                        gcloud auth activate-service-account --key-file=gcp-key.json
+                        gcloud config set project ${GCP_PROJECT_ID}
+                        
+                        # Configure Docker to use gcloud as credential helper
+                        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+                        
+                        echo "Pushing image to Google Artifact Registry..."
+                        docker push ${FULL_IMAGE_NAME}
+                        docker push ${LATEST_IMAGE_NAME}
+                        echo "Images pushed successfully!"
+                        
+                        rm -f gcp-key.json
+                    '''
+                }
             }
         }
         
@@ -281,10 +313,15 @@ pipeline {
     post {
         always {
             script {
+                // Clean up Docker images if Docker is available
                 sh '''
-                    echo "Cleaning up Docker images..."
-                    docker rmi ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
-                    docker system prune -f || true
+                    if command -v docker >/dev/null 2>&1; then
+                        echo "Cleaning up Docker images..."
+                        docker rmi ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
+                        docker system prune -f || true
+                    else
+                        echo "Docker not available, skipping Docker cleanup"
+                    fi
                     rm -f ${WORKSPACE}/kubeconfig
                 '''
                 
