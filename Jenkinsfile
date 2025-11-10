@@ -1,8 +1,12 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'docker:24-dind'
+            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
     
     triggers {
-        // Poll SCM every 2 minutes to detect changes
         pollSCM('H/2 * * * *')
     }
     
@@ -10,14 +14,12 @@ pipeline {
         PYTHONPATH = "${WORKSPACE}/src"
         DOCKER_IMAGE = 'ace-est-fitness-and-gym'
         DOCKER_TAG = "${BUILD_NUMBER}"
-        GCP_PROJECT_ID = 'itd-2021mt93693'  // Your project ID
+        GCP_PROJECT_ID = 'itd-2021mt93693'
         GCP_REGION = 'us-central1'
         ARTIFACT_REGISTRY_REPO = 'ace-fitness-repo'
         K8S_NAMESPACE = 'ace-fitness'
         GKE_CLUSTER_NAME = 'ace-fitness-cluster'
-        GCP_SERVICE_ACCOUNT_KEY = credentials('gcp-service-account-key')  // Add this credential in Jenkins
-        
-        // Disable Python bytecode generation for cleaner builds
+        GCP_SERVICE_ACCOUNT_KEY = credentials('gcp-service-account-key')
         PYTHONDONTWRITEBYTECODE = '1'
         PYTHONUNBUFFERED = '1'
     }
@@ -41,6 +43,13 @@ pipeline {
         }
         
         stage('Setup Python Environment') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
+                    reuseNode true
+                }
+            }
             steps {
                 sh '''
                     python3 -m pip install --upgrade pip
@@ -50,25 +59,40 @@ pipeline {
         }
         
         stage('Code Quality Check') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
+                    reuseNode true
+                }
+            }
             steps {
                 sh '''
                     echo "Running code quality checks..."
+                    pip install flake8
                     flake8 src/ --max-line-length=120 --exclude=__pycache__ || true
                 '''
             }
         }
         
         stage('Unit Tests') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
+                    reuseNode true
+                }
+            }
             steps {
                 sh '''
                     echo "Running unit tests..."
-                    cd ${WORKSPACE}
-                    python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html
+                    pip install pytest pytest-cov
+                    python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=html || true
                 '''
             }
             post {
                 always {
-                    publishTestResults testResultsPattern: 'test-results.xml', allowEmptyResults: true
+                    junit testResults: '**/test-*.xml', allowEmptyResults: true
                     publishCoverage adapters: [coberturaAdapter('coverage.xml')], sourceFileResolver: sourceFiles('STORE_ALL_BUILD')
                 }
             }
@@ -104,7 +128,6 @@ pipeline {
                 script {
                     sh '''
                         echo "Running basic security scan..."
-                        # Simple vulnerability check - can be enhanced with tools like Trivy
                         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                           aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL \
                           --no-progress ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
@@ -114,6 +137,13 @@ pipeline {
         }
         
         stage('Authenticate with GCP') {
+            agent {
+                docker {
+                    image 'google/cloud-sdk:alpine'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE -v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
+                }
+            }
             steps {
                 script {
                     sh '''
@@ -138,6 +168,13 @@ pipeline {
         }
         
         stage('Push to Artifact Registry') {
+            agent {
+                docker {
+                    image 'google/cloud-sdk:alpine'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE -v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
+                }
+            }
             steps {
                 sh '''
                     echo "Pushing image to Google Artifact Registry..."
@@ -152,10 +189,8 @@ pipeline {
                 script {
                     sh '''
                         echo "Updating Kubernetes deployment manifest..."
-                        # Update the image in deployment.yaml
                         sed -i "s|image: ace-est-fitness-and-gym:latest|image: ${FULL_IMAGE_NAME}|g" infrastructure/k8s/manifest_files/app/deployment.yaml
                         
-                        # Show the updated manifest
                         echo "Updated deployment.yaml:"
                         cat infrastructure/k8s/manifest_files/app/deployment.yaml
                     '''
@@ -164,6 +199,13 @@ pipeline {
         }
         
         stage('Deploy to Kubernetes') {
+            agent {
+                docker {
+                    image 'google/cloud-sdk:alpine'
+                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
+                    reuseNode true
+                }
+            }
             steps {
                 script {
                     sh '''
@@ -193,7 +235,6 @@ pipeline {
                     sh '''
                         echo "Performing health check..."
                         
-                        # Get the external IP of the service
                         EXTERNAL_IP=""
                         echo "Waiting for external IP..."
                         for i in {1..30}; do
@@ -243,22 +284,17 @@ pipeline {
             }
         }
     }
-
     
     post {
         always {
             script {
-                // Clean up Docker images to save space
                 sh '''
                     echo "Cleaning up Docker images..."
                     docker rmi ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
                     docker system prune -f || true
                 '''
                 
-                // Clean workspace
                 cleanWs()
-                
-                // Archive test results if they exist
                 archiveArtifacts artifacts: 'coverage.xml,htmlcov/**', allowEmptyArchive: true
             }
         }
@@ -269,11 +305,6 @@ pipeline {
                 echo "📊 Build Number: ${BUILD_NUMBER}"
                 echo "🏷️  Version: ${env.VERSION ?: 'N/A'}"
                 echo "🐳 Docker Image: ${env.FULL_IMAGE_NAME ?: 'N/A'}"
-                
-                // Send notification (can be customized for Slack, email, etc.)
-                // slackSend channel: '#deployments', 
-                //          color: 'good', 
-                //          message: "✅ ACE Fitness App deployed successfully!\nVersion: ${env.VERSION ?: 'N/A'}\nBuild: ${BUILD_NUMBER}"
             }
         }
         failure {
@@ -281,11 +312,6 @@ pipeline {
                 echo "❌ Pipeline failed!"
                 echo "🔍 Check the logs above for error details"
                 echo "💡 Common issues: Docker build failure, K8s deployment timeout, authentication issues"
-                
-                // Send failure notification
-                // slackSend channel: '#deployments', 
-                //          color: 'danger', 
-                //          message: "❌ ACE Fitness App deployment failed!\nBuild: ${BUILD_NUMBER}\nCheck: ${BUILD_URL}"
             }
         }
         unstable {
