@@ -6,11 +6,6 @@ pipeline {
         pollSCM('H/2 * * * *')
     }
     
-    tools {
-        // Ensure Docker is available
-        dockerTool 'docker'
-    }
-    
     environment {
         PYTHONPATH = "${WORKSPACE}/src"
         DOCKER_IMAGE = 'ace-est-fitness-and-gym'
@@ -31,6 +26,17 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+        
+        stage('Verify Docker') {
+            steps {
+                sh '''
+                    echo "Verifying Docker installation..."
+                    docker --version
+                    docker info
+                    echo "Docker is available and working!"
+                '''
             }
         }
         
