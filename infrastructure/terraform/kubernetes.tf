@@ -176,6 +176,12 @@ resource "kubernetes_deployment" "jenkins" {
             mount_path = "/var/jenkins_home"
           }
 
+          # Mount Docker socket for Docker-in-Docker functionality
+          volume_mount {
+            name       = "docker-sock"
+            mount_path = "/var/run/docker.sock"
+          }
+
           env {
             name  = "JAVA_OPTS"
             value = "-Djenkins.install.runSetupWizard=false"
@@ -184,6 +190,11 @@ resource "kubernetes_deployment" "jenkins" {
           env {
             name  = "JENKINS_OPTS"
             value = "--httpPort=8080"
+          }
+
+          # Enable privileged mode for Docker operations
+          security_context {
+            privileged = true
           }
 
           resources {
@@ -202,6 +213,15 @@ resource "kubernetes_deployment" "jenkins" {
           name = "jenkins-data"
           persistent_volume_claim {
             claim_name = kubernetes_persistent_volume_claim.jenkins.metadata[0].name
+          }
+        }
+
+        # Mount host Docker socket for Docker-in-Docker functionality
+        volume {
+          name = "docker-sock"
+          host_path {
+            path = "/var/run/docker.sock"
+            type = "Socket"
           }
         }
       }
