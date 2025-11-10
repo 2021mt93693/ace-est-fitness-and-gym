@@ -135,6 +135,9 @@ pipeline {
                     def imageTag = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
                     
                     sh """
+                        # Set PATH to include gcloud and kubectl
+                        export PATH=\$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
+                        
                         echo "Building and pushing Docker image..."
                         
                         # Check if Docker daemon is actually accessible
@@ -224,6 +227,9 @@ EOF
                 script {
                     // Create namespace if it doesn't exist (though Terraform should have created it)
                     sh """
+                        # Set PATH to include gcloud and kubectl
+                        export PATH=\$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
+                        
                         kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                         
                         # Apply application manifests if first deployment
