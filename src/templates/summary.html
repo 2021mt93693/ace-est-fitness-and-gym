@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Workout Summary - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .main-container { max-width: 700px; margin: 0 auto; }
+        .title { color: #007bff; text-align: center; margin-bottom: 30px; }
+        .category-warmup { color: #ffc107; }
+        .category-workout { color: #007bff; }
+        .category-cooldown { color: #28a745; }
+        .total-stats { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
+        .motivation-msg { background: linear-gradient(135deg, #007bff, #6610f2); color: white; }
+        .category-card { border-left: 4px solid; }
+        .warmup-border { border-left-color: #ffc107 !important; }
+        .workout-border { border-left-color: #007bff !important; }
+        .cooldown-border { border-left-color: #28a745 !important; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="main-container">
+            <h1 class="title">📊 Session Summary</h1>
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card total-stats">
+                        <div class="card-body text-center">
+                            <h3 class="card-title">{{ summary.total_time }}</h3>
+                            <p class="card-text">Total Minutes</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card total-stats">
+                        <div class="card-body text-center">
+                            <h3 class="card-title">{{ summary.session_count }}</h3>
+                            <p class="card-text">Total Sessions</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if summary.session_count > 0 %}
+                <!-- Category Breakdown -->
+                <div class="row mb-4">
+                    {% for category, data in summary.categories.items() %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card category-card {{ category.lower().replace('-', '') }}-border">
+                                <div class="card-header">
+                                    <h6 class="mb-0 category-{{ category.lower().replace('-', '') }}">
+                                        <strong>{{ category }}</strong>
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="text-center">
+                                        <h5>{{ data.total_time }} min</h5>
+                                        <small class="text-muted">{{ data.count }} session(s)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Detailed Sessions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Detailed Session Log</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for category, data in summary.categories.items() %}
+                            <div class="mb-4">
+                                <h6 class="category-{{ category.lower().replace('-', '') }}">
+                                    <strong>{{ category }}:</strong>
+                                </h6>
+                                {% if data.sessions %}
+                                    <div class="ms-3">
+                                        {% for session in data.sessions %}
+                                            <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                                                <span>{{ loop.index }}. {{ session.exercise }} - {{ session.duration }} min</span>
+                                                <small class="text-muted">{{ session.timestamp }}</small>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted ms-3"><em>No sessions recorded.</em></p>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Motivation Message -->
+                <div class="card motivation-msg mb-4">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">🎉 {{ summary.motivation }}</h5>
+                    </div>
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="text-muted">No sessions logged yet!</h5>
+                        <p class="text-muted">Start your fitness journey by adding your first session.</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Navigation -->
+            <div class="text-center">
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                    ← Back to Tracker
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

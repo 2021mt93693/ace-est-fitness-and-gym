@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2025-11-10
+- Modified the 1.1.0 tinker application to web application
+- Added equivalent test cases
+
 ## [2.0.0] - 2025-11-10
 - Assignment 2 :: Changes 
 - Added comprehensive CHANGELOG.md documentation
