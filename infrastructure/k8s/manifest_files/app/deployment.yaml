@@ -19,12 +19,14 @@ spec:
       - name: ace-fitness-app
         image: ace-est-fitness-and-gym:latest
         ports:
-        - containerPort: 5000
+        - containerPort: 8080
         env:
         - name: PORT
-          value: "5000"
+          value: "8080"
         - name: PYTHONPATH
           value: "/app"
+        - name: FLASK_ENV
+          value: "production"
         resources:
           limits:
             memory: "512Mi"
@@ -34,13 +36,13 @@ spec:
             cpu: "250m"
         livenessProbe:
           httpGet:
-            path: /
-            port: 5000
+            path: /health
+            port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /
-            port: 5000
+            path: /health
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5

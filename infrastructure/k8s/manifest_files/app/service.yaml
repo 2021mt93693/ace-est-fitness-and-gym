@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ace-fitness-service
+  namespace: ace-fitness
+  labels:
+    app: ace-fitness-app
+spec:
+  selector:
+    app: ace-fitness-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: LoadBalancer
