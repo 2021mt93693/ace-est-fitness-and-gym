@@ -1,6 +1,13 @@
 pipeline {
     agent any
     
+    triggers {
+        // Poll SCM every 5 minutes as backup
+        pollSCM('H/5 * * * *')
+        // GitHub webhook (requires GitHub plugin configuration)
+        githubPush()
+    }
+    
     environment {
         PYTHONPATH = "${WORKSPACE}/src"
         DOCKER_IMAGE = 'ace-est-fitness-and-gym'
