@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Plan - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-heart-pulse"></i> ACEest Fitness & Gym
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('workout_plan') }}">
+                            <i class="bi bi-calendar-check"></i> Workout Plan
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('diet_guide') }}">
+                            <i class="bi bi-egg-fried"></i> Diet Guide
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('progress') }}">
+                            <i class="bi bi-graph-up"></i> Progress
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('summary') }}">
+                            <i class="bi bi-clipboard-data"></i> Summary
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <h1 class="display-4 text-primary mb-2">
+                <i class="bi bi-calendar-check"></i> Personalized Workout Plan
+            </h1>
+            <p class="lead text-muted">Your complete fitness routine guide</p>
+        </div>
+
+        <div class="row">
+            {% for category, exercises in workout_plans.items() %}
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header 
+                        {% if 'Warm-up' in category %}bg-info text-white
+                        {% elif 'Strength' in category %}bg-success text-white
+                        {% else %}bg-warning text-dark
+                        {% endif %}">
+                        <h5 class="mb-0">
+                            {% if 'Warm-up' in category %}<i class="bi bi-thermometer-half"></i>
+                            {% elif 'Strength' in category %}<i class="bi bi-lightning-charge"></i>
+                            {% else %}<i class="bi bi-heart"></i>
+                            {% endif %}
+                            {{ category }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            {% for exercise in exercises %}
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                {{ exercise }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Tips Section -->
+        <div class="card mt-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Workout Tips</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary"><i class="bi bi-stopwatch"></i> Timing</h6>
+                        <ul class="list-unstyled">
+                            <li>• Start with warm-up to prevent injury</li>
+                            <li>• Take 30-60 second breaks between sets</li>
+                            <li>• Cool down to aid recovery</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success"><i class="bi bi-award"></i> Form & Safety</h6>
+                        <ul class="list-unstyled">
+                            <li>• Focus on proper form over speed</li>
+                            <li>• Listen to your body</li>
+                            <li>• Stay hydrated throughout</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-plus-circle"></i> Start Logging Your Workout
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

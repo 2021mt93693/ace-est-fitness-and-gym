@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diet Guide - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-heart-pulse"></i> ACEest Fitness & Gym
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="bi bi-house"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('workout_plan') }}">
+                            <i class="bi bi-calendar-check"></i> Workout Plan
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('diet_guide') }}">
+                            <i class="bi bi-egg-fried"></i> Diet Guide
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('progress') }}">
+                            <i class="bi bi-graph-up"></i> Progress
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('summary') }}">
+                            <i class="bi bi-clipboard-data"></i> Summary
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <h1 class="display-4 text-success mb-2">
+                <i class="bi bi-egg-fried"></i> Best Diet Guide for Fitness Goals
+            </h1>
+            <p class="lead text-muted">Nutrition plans tailored to your fitness objectives</p>
+        </div>
+
+        <div class="row">
+            {% for goal, foods in diet_plans.items() %}
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header 
+                        {% if '🎯' in goal %}bg-danger text-white
+                        {% elif '💪' in goal %}bg-success text-white
+                        {% else %}bg-warning text-dark
+                        {% endif %}">
+                        <h5 class="mb-0">
+                            {{ goal }} Plan
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            {% for food in foods %}
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="bi bi-dot text-primary me-2 mt-1"></i>
+                                <div>
+                                    <strong>{{ food.split(':')[0] }}:</strong>
+                                    <br>{{ food.split(':')[1] if ':' in food else food }}
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Nutrition Tips -->
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Nutrition Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6 class="text-primary"><i class="bi bi-droplet"></i> Hydration</h6>
+                        <ul class="list-unstyled">
+                            <li>• Drink 8-10 glasses of water daily</li>
+                            <li>• Extra water before, during, after workouts</li>
+                            <li>• Monitor urine color for hydration levels</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-success"><i class="bi bi-clock"></i> Meal Timing</h6>
+                        <ul class="list-unstyled">
+                            <li>• Eat 2-3 hours before workouts</li>
+                            <li>• Post-workout meal within 30 minutes</li>
+                            <li>• 5-6 smaller meals vs 3 large ones</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-warning"><i class="bi bi-exclamation-triangle"></i> Important</h6>
+                        <ul class="list-unstyled">
+                            <li>• Consult nutritionist for personalized plans</li>
+                            <li>• Consider food allergies/preferences</li>
+                            <li>• Balance is key - don't eliminate food groups</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Macronutrient Guide -->
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Macronutrient Balance</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded">
+                            <i class="bi bi-lightning-charge display-4 text-warning"></i>
+                            <h5 class="mt-2">Carbohydrates</h5>
+                            <p class="text-muted">45-65% of total calories<br>Primary energy source</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded">
+                            <i class="bi bi-egg display-4 text-success"></i>
+                            <h5 class="mt-2">Proteins</h5>
+                            <p class="text-muted">10-35% of total calories<br>Muscle building & repair</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded">
+                            <i class="bi bi-droplet-half display-4 text-primary"></i>
+                            <h5 class="mt-2">Healthy Fats</h5>
+                            <p class="text-muted">20-35% of total calories<br>Hormone production & absorption</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-success btn-lg">
+                <i class="bi bi-plus-circle"></i> Start Your Fitness Journey
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
