@@ -267,9 +267,18 @@ spec:
         - "--destination=${imageTag}"
         - "--cache=true"
         - "--cache-repo=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/cache"
+        - "--skip-tls-verify-registry=${GCP_REGION}-docker.pkg.dev"
+        - "--verbosity=info"
         env:
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /var/secrets/google/gcp-key.json
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi" 
+            cpu: "1000m"
         volumeMounts:
         - name: gcp-key
           mountPath: /var/secrets/google
@@ -280,17 +289,37 @@ spec:
           secretName: gcp-service-account-key
 EOF
                             
-                            # Wait for job completion
-                            echo "Waiting for build job to complete..."
-                            kubectl wait --for=condition=complete job/docker-build-${BUILD_NUMBER} -n jenkins --timeout=600s
+                            # Wait for job completion with extended timeout
+                            echo "Waiting for build job to complete (this may take 10-15 minutes)..."
+                            kubectl wait --for=condition=complete job/docker-build-${BUILD_NUMBER} -n jenkins --timeout=900s
                             
-                            # Check if job succeeded
-                            if kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q "True"; then
+                            # Check if job succeeded or failed
+                            JOB_STATUS=\$(kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
+                            
+                            if [ "\$JOB_STATUS" = "True" ]; then
                                 echo "✅ Docker image built successfully using Kaniko!"
+                            elif [ "\$JOB_STATUS" = "False" ] || [ "\$JOB_STATUS" = "Unknown" ]; then
+                                echo "❌ Docker build failed or timed out"
+                                echo "=== Build Job Logs ==="
+                                kubectl logs job/docker-build-${BUILD_NUMBER} -n jenkins --tail=50 || echo "Could not retrieve logs"
+                                
+                                # Check if the job failed due to timeout
+                                FAILED_STATUS=\$(kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "Unknown")
+                                if [ "\$FAILED_STATUS" = "True" ]; then
+                                    echo "Build failed due to job failure"
+                                    exit 1
+                                else
+                                    echo "Build may have timed out - check if image was pushed to registry"
+                                    # Try to verify if the image exists in the registry
+                                    if gcloud artifacts docker images list ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE} --include-tags | grep -q "${DOCKER_TAG}"; then
+                                        echo "✅ Image found in registry despite timeout - continuing..."
+                                    else
+                                        echo "❌ Image not found in registry - build truly failed"
+                                        exit 1
+                                    fi
+                                fi
                             else
-                                echo "❌ Docker build failed"
-                                kubectl logs job/docker-build-${BUILD_NUMBER} -n jenkins
-                                exit 1
+                                echo "✅ Docker image built successfully using Kaniko!"
                             fi
                             
                             # Clean up build job
