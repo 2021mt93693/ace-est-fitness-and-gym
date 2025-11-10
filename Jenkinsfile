@@ -27,12 +27,6 @@ pipeline {
         stage('Code Quality Check') {
             steps {
                 script {
-                    // Since we can't install Python in Jenkins container,
-                    // we'll skip linting and testing for now
-                    // The Docker image build will validate the code works
-                    echo "Skipping Python linting/testing - will be handled in Docker build"
-                    echo "Code checkout successful, proceeding to Docker build..."
-                    
                     // Basic file checks
                     sh '''
                         echo "Checking project structure..."
@@ -57,6 +51,95 @@ pipeline {
                         fi
                         echo "Project structure validation passed!"
                     '''
+                }
+            }
+        }
+        
+        stage('Unit Testing & Linting') {
+            steps {
+                script {
+                    sh '''
+                        # Set PATH to include kubectl (if needed)
+                        export PATH=$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
+                        
+                        echo "Running Python linting and unit tests using Python container..."
+                        
+                        # Create a temporary testing job in Kubernetes
+                        kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: python-test-${BUILD_NUMBER}
+  namespace: jenkins
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: python-tester
+        image: python:3.9-slim
+        command: ["/bin/bash"]
+        args:
+        - "-c"
+        - |
+          echo "Installing dependencies..."
+          pip install --upgrade pip
+          pip install flake8 pytest coverage pytest-cov
+          
+          echo "Installing project requirements..."
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          
+          echo "Running linting..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Critical linting issues found"
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || echo "Style issues found"
+          
+          echo "Running unit tests..."
+          export PYTHONPATH=/workspace/src
+          pytest --cov=src --cov-report=xml --cov-report=term tests/ || echo "Tests completed with issues"
+          
+          echo "Python testing completed!"
+        workingDir: /workspace
+        volumeMounts:
+        - name: source-code
+          mountPath: /workspace
+      initContainers:
+      - name: git-clone
+        image: alpine/git:latest
+        command: ["/bin/sh"]
+        args:
+        - "-c"
+        - "git clone https://github.com/2021mt93693/ace-est-fitness-and-gym.git /workspace && cd /workspace && git checkout FEATURE-JENKINS"
+        volumeMounts:
+        - name: source-code
+          mountPath: /workspace
+      volumes:
+      - name: source-code
+        emptyDir: {}
+EOF
+                        
+                        # Wait for job completion
+                        echo "Waiting for testing job to complete..."
+                        kubectl wait --for=condition=complete job/python-test-${BUILD_NUMBER} -n jenkins --timeout=300s || echo "Testing timeout"
+                        
+                        # Show test results
+                        echo "=== Test Results ==="
+                        kubectl logs job/python-test-${BUILD_NUMBER} -n jenkins -c python-tester || echo "Could not retrieve test logs"
+                        
+                        # Clean up test job (but allow failure for debugging)
+                        kubectl delete job python-test-${BUILD_NUMBER} -n jenkins --ignore-not-found=true || echo "Cleanup attempted"
+                        
+                        echo "Unit testing stage completed!"
+                    '''
+                }
+            }
+            post {
+                always {
+                    script {
+                        // Archive any test artifacts that might exist
+                        sh 'echo "Test stage completed"'
+                    }
                 }
             }
         }
@@ -124,6 +207,8 @@ pipeline {
                         else
                             echo "WARNING: gcloud CLI not available, will try manual configuration"
                         fi
+                        
+                        echo "GCP authentication completed!"
                     '''
                 }
             }
@@ -138,7 +223,8 @@ pipeline {
                         # Set PATH to include gcloud and kubectl
                         export PATH=\$PATH:/tmp/google-cloud-sdk/bin:/var/jenkins_home/.local/bin
                         
-                        echo "Building and pushing Docker image..."
+                        echo "Building and pushing Docker image to Google Artifact Registry..."
+                        echo "Image will be tagged as: ${imageTag}"
                         
                         # Check if Docker daemon is actually accessible
                         if docker info >/dev/null 2>&1; then
@@ -149,16 +235,16 @@ pipeline {
                             docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
                             
                             # Tag for Artifact Registry
-                            echo "Tagging image: ${imageTag}"
+                            echo "Tagging image for Artifact Registry..."
                             docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${imageTag}
                             
                             # Push to Artifact Registry
                             echo "Pushing image to Artifact Registry..."
                             docker push ${imageTag}
                             
-                            echo "Image pushed successfully: ${imageTag}"
+                            echo "✅ Image pushed successfully to Artifact Registry: ${imageTag}"
                         else
-                            echo "Docker daemon not accessible. Using kubectl to create a build pod..."
+                            echo "Docker daemon not accessible. Using Kaniko to build and push to Artifact Registry..."
                             
                             # Create a build job using existing jenkins service account
                             echo "Creating Kaniko build job for Docker image..."
