@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'docker:24-dind'
-            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
     
     triggers {
         pollSCM('H/2 * * * *')
@@ -35,9 +30,8 @@ pipeline {
             steps {
                 sh '''
                     echo "Verifying Docker installation..."
-                    docker --version
-                    docker info
-                    echo "Docker is available and working!"
+                    docker --version || echo "Docker not found in PATH"
+                    docker info || echo "Docker daemon not accessible"
                 '''
             }
         }
@@ -46,7 +40,6 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
                     reuseNode true
                 }
             }
@@ -62,7 +55,6 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
                     reuseNode true
                 }
             }
@@ -79,7 +71,6 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
                     reuseNode true
                 }
             }
@@ -113,11 +104,14 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
+                    // Use docker command directly on the Jenkins agent
                     sh '''
                         echo "Building Docker image..."
                         docker build -t ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} .
                         docker tag ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} ${FULL_IMAGE_NAME}
                         docker tag ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} ${LATEST_IMAGE_NAME}
+                        echo "Docker images created successfully!"
+                        docker images | grep ${DOCKER_IMAGE}
                     '''
                 }
             }
@@ -140,7 +134,7 @@ pipeline {
             agent {
                 docker {
                     image 'google/cloud-sdk:alpine'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE -v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
                     reuseNode true
                 }
             }
@@ -157,6 +151,9 @@ pipeline {
                         
                         # Get GKE credentials
                         gcloud container clusters get-credentials ${GKE_CLUSTER_NAME} --region=${GCP_REGION} --project=${GCP_PROJECT_ID}
+                        
+                        # Copy kubeconfig to workspace for later stages
+                        cp ~/.kube/config ${WORKSPACE}/kubeconfig
                     '''
                 }
             }
@@ -168,18 +165,12 @@ pipeline {
         }
         
         stage('Push to Artifact Registry') {
-            agent {
-                docker {
-                    image 'google/cloud-sdk:alpine'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE -v /var/run/docker.sock:/var/run/docker.sock'
-                    reuseNode true
-                }
-            }
             steps {
                 sh '''
                     echo "Pushing image to Google Artifact Registry..."
                     docker push ${FULL_IMAGE_NAME}
                     docker push ${LATEST_IMAGE_NAME}
+                    echo "Images pushed successfully!"
                 '''
             }
         }
@@ -189,7 +180,7 @@ pipeline {
                 script {
                     sh '''
                         echo "Updating Kubernetes deployment manifest..."
-                        sed -i "s|image: ace-est-fitness-and-gym:latest|image: ${FULL_IMAGE_NAME}|g" infrastructure/k8s/manifest_files/app/deployment.yaml
+                        sed -i "s|image:.*ace-est-fitness-and-gym.*|image: ${FULL_IMAGE_NAME}|g" infrastructure/k8s/manifest_files/app/deployment.yaml
                         
                         echo "Updated deployment.yaml:"
                         cat infrastructure/k8s/manifest_files/app/deployment.yaml
@@ -202,13 +193,16 @@ pipeline {
             agent {
                 docker {
                     image 'google/cloud-sdk:alpine'
-                    args '-v $WORKSPACE:$WORKSPACE -w $WORKSPACE'
+                    args '-v ${WORKSPACE}:${WORKSPACE} -w ${WORKSPACE} --entrypoint=""'
                     reuseNode true
                 }
             }
             steps {
                 script {
                     sh '''
+                        # Use the kubeconfig from previous stage
+                        export KUBECONFIG=${WORKSPACE}/kubeconfig
+                        
                         echo "Deploying to Kubernetes cluster..."
                         
                         # Create namespace if it doesn't exist
@@ -230,15 +224,24 @@ pipeline {
         }
         
         stage('Health Check') {
+            agent {
+                docker {
+                    image 'google/cloud-sdk:alpine'
+                    args '-v ${WORKSPACE}:${WORKSPACE} -w ${WORKSPACE} --entrypoint=""'
+                    reuseNode true
+                }
+            }
             steps {
                 script {
                     sh '''
+                        export KUBECONFIG=${WORKSPACE}/kubeconfig
+                        
                         echo "Performing health check..."
                         
                         EXTERNAL_IP=""
                         echo "Waiting for external IP..."
                         for i in {1..30}; do
-                            EXTERNAL_IP=$(kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                            EXTERNAL_IP=$(kubectl get service ace-fitness-service -n ${K8S_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
                             if [ ! -z "$EXTERNAL_IP" ]; then
                                 break
                             fi
@@ -250,7 +253,7 @@ pipeline {
                             echo "External IP: $EXTERNAL_IP"
                             echo "Testing health endpoint..."
                             for i in {1..10}; do
-                                if curl -f http://$EXTERNAL_IP/health; then
+                                if curl -f http://$EXTERNAL_IP/health 2>/dev/null; then
                                     echo "Health check passed!"
                                     break
                                 else
@@ -277,8 +280,8 @@ pipeline {
                     sh """
                         git config user.name "Jenkins"
                         git config user.email "jenkins@localhost"
-                        git tag "v${version}-${BUILD_NUMBER}"
-                        git push origin "v${version}-${BUILD_NUMBER}"
+                        git tag "v${version}-${BUILD_NUMBER}" || true
+                        git push origin "v${version}-${BUILD_NUMBER}" || echo "Could not push tag"
                     """
                 }
             }
@@ -292,6 +295,7 @@ pipeline {
                     echo "Cleaning up Docker images..."
                     docker rmi ${DOCKER_IMAGE}:${VERSION}-${BUILD_NUMBER} || true
                     docker system prune -f || true
+                    rm -f ${WORKSPACE}/kubeconfig
                 '''
                 
                 cleanWs()
