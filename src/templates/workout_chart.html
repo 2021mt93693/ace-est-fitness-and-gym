@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Chart - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+                <i class="fas fa-dumbbell"></i> ACEest Fitness & Gym
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_workout') }}">Log Workouts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('workout_chart') }}">Workout Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('diet_chart') }}">Diet Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('progress_tracker') }}">Progress</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('view_summary') }}">Summary</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-warning text-dark">
+                        <h3 class="card-title mb-0">🏋️ Personalized Workout Chart</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead">Follow these exercise recommendations for a complete workout routine:</p>
+                        
+                        <div class="row">
+                            {% for category, exercises in suggestions.items() %}
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header {% if category == 'Warm-up' %}bg-warning{% elif category == 'Workout' %}bg-success{% else %}bg-info{% endif %} text-white">
+                                        <h5 class="card-title mb-0">
+                                            {% if category == 'Warm-up' %}
+                                                <i class="fas fa-fire"></i>
+                                            {% elif category == 'Workout' %}
+                                                <i class="fas fa-dumbbell"></i>
+                                            {% else %}
+                                                <i class="fas fa-leaf"></i>
+                                            {% endif %}
+                                            {{ category }} Exercises
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-unstyled">
+                                            {% for exercise in exercises %}
+                                            <li class="mb-2">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check-circle text-{{ 'warning' if category == 'Warm-up' else ('success' if category == 'Workout' else 'info') }} me-2"></i>
+                                                    <span>{{ exercise }}</span>
+                                                </div>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        <div class="text-center mt-3">
+                                            <a href="{{ url_for('log_workout') }}" class="btn btn-{{ 'warning' if category == 'Warm-up' else ('success' if category == 'Workout' else 'info') }} btn-sm">
+                                                <i class="fas fa-plus"></i> Log {{ category }}
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0"><i class="fas fa-lightbulb"></i> Workout Tips</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <h6><i class="fas fa-fire text-warning"></i> Warm-up (5-10 minutes)</h6>
+                                                <p class="small">Prepare your body for exercise by gradually increasing heart rate and warming up muscles.</p>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <h6><i class="fas fa-dumbbell text-success"></i> Main Workout (20-45 minutes)</h6>
+                                                <p class="small">Focus on your target muscle groups with proper form and controlled movements.</p>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <h6><i class="fas fa-leaf text-info"></i> Cool-down (5-10 minutes)</h6>
+                                                <p class="small">Gradually lower your heart rate and stretch to prevent muscle soreness.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Tracker - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+                <i class="fas fa-dumbbell"></i> ACEest Fitness & Gym
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_workout') }}">Log Workouts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('workout_chart') }}">Workout Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('diet_chart') }}">Diet Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('progress_tracker') }}">Progress</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('view_summary') }}">Summary</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="card-title mb-0">📈 Personal Progress Tracker</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if category_totals and category_totals.values() | sum > 0 %}
+                        <div class="row">
+                            <div class="col-lg-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="card-title mb-0">Time Spent per Category</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="barChart" width="400" height="200"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-lg-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="card-title mb-0">Workout Distribution</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="pieChart" width="400" height="200"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0"><i class="fas fa-chart-line"></i> Progress Summary</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            {% for category, time in category_totals.items() %}
+                                            <div class="col-md-4 mb-3">
+                                                <div class="card border-{{ 'warning' if category == 'Warm-up' else ('success' if category == 'Workout' else 'info') }}">
+                                                    <div class="card-body">
+                                                        <h2 class="text-{{ 'warning' if category == 'Warm-up' else ('success' if category == 'Workout' else 'info') }}">{{ time }}</h2>
+                                                        <p class="card-text">minutes in {{ category }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        
+                                        <div class="row mt-4">
+                                            <div class="col-12 text-center">
+                                                <h4 class="text-primary">Total Workout Time: {{ category_totals.values() | sum }} minutes</h4>
+                                                <p class="text-muted">Keep up the great work! Consistency is key to reaching your fitness goals.</p>
+                                                <a href="{{ url_for('log_workout') }}" class="btn btn-primary">
+                                                    <i class="fas fa-plus"></i> Add More Workouts
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-line fa-5x text-muted mb-3"></i>
+                            <h4 class="text-muted">No progress data available</h4>
+                            <p class="text-muted">Start logging your workouts to see your progress visualized here.</p>
+                            <a href="{{ url_for('log_workout') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Log Your First Workout
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% if category_totals and category_totals.values() | sum > 0 %}
+    <script>
+        // Chart data
+        const categoryData = {{ category_totals | tojson }};
+        const categories = Object.keys(categoryData);
+        const values = Object.values(categoryData);
+        
+        // Colors for charts
+        const colors = {
+            'Warm-up': '#ffc107',
+            'Workout': '#28a745', 
+            'Cool-down': '#17a2b8'
+        };
+        
+        const chartColors = categories.map(cat => colors[cat]);
+        
+        // Bar Chart
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: categories,
+                datasets: [{
+                    label: 'Minutes',
+                    data: values,
+                    backgroundColor: chartColors,
+                    borderColor: chartColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Minutes'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Pie Chart
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: categories,
+                datasets: [{
+                    data: values,
+                    backgroundColor: chartColors,
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

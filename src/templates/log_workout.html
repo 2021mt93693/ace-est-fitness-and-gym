@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Workouts - ACEest Fitness & Gym</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{{ url_for('home') }}">
+                <i class="fas fa-dumbbell"></i> ACEest Fitness & Gym
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('log_workout') }}">Log Workouts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('workout_chart') }}">Workout Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('diet_chart') }}">Diet Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('progress_tracker') }}">Progress</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('view_summary') }}">Summary</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title mb-0">🏋️ Log Your Workout</h3>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                          {% if messages %}
+                            {% for category, message in messages %}
+                              <div class="alert alert-{{ category }} alert-dismissible fade show">
+                                  {{ message }}
+                                  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                              </div>
+                            {% endfor %}
+                          {% endif %}
+                        {% endwith %}
+
+                        <form method="post" id="workoutForm">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="category" class="form-label">Select Category</label>
+                                    <select class="form-select" id="category" name="category" required>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat }}" {% if cat == 'Workout' %}selected{% endif %}>{{ cat }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-8 mb-3">
+                                    <label for="exercise" class="form-label">Exercise</label>
+                                    <input type="text" class="form-control" id="exercise" name="exercise" 
+                                           placeholder="Enter exercise name or select from suggestions" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="duration" class="form-label">Duration (minutes)</label>
+                                    <input type="number" class="form-control" id="duration" name="duration" 
+                                           min="1" max="300" required>
+                                </div>
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label">Exercise Suggestions</label>
+                                    <div id="suggestions" class="d-flex flex-wrap gap-2">
+                                        <!-- Suggestions will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Add Exercise
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('view_summary') }}" class="btn btn-outline-primary">
+                                <i class="fas fa-chart-bar"></i> View Summary
+                            </a>
+                            <a href="{{ url_for('progress_tracker') }}" class="btn btn-outline-success">
+                                <i class="fas fa-chart-line"></i> Track Progress
+                            </a>
+                            <a href="{{ url_for('workout_chart') }}" class="btn btn-outline-warning">
+                                <i class="fas fa-list"></i> Exercise Chart
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logged Workouts Section -->
+        <div class="row mt-4">
+            {% for category in categories %}
+            <div class="col-lg-4 mb-4">
+                <div class="card shadow">
+                    <div class="card-header {% if category == 'Warm-up' %}bg-warning{% elif category == 'Workout' %}bg-success{% else %}bg-info{% endif %} text-white">
+                        <h5 class="card-title mb-0">{{ category }}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if workouts_by_category[category] %}
+                            {% for entry in workouts_by_category[category] %}
+                            <div class="border-bottom pb-2 mb-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>{{ entry.exercise }}</strong><br>
+                                        <small class="text-muted">{{ entry.duration }} minutes</small>
+                                    </div>
+                                    <small class="text-muted">{{ entry.timestamp.split(' ')[1][:5] }}</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">No {{ category.lower() }} exercises logged yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Exercise suggestions data
+        const exerciseSuggestions = {{ suggestions | tojson }};
+        
+        // Update suggestions based on category selection
+        function updateSuggestions() {
+            const category = document.getElementById('category').value;
+            const suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = '';
+            
+            exerciseSuggestions[category].forEach(exercise => {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-secondary cursor-pointer';
+                badge.style.cursor = 'pointer';
+                badge.textContent = exercise;
+                badge.onclick = () => {
+                    document.getElementById('exercise').value = exercise;
+                };
+                suggestionsDiv.appendChild(badge);
+            });
+        }
+        
+        // Initialize suggestions on page load
+        document.addEventListener('DOMContentLoaded', updateSuggestions);
+        
+        // Update suggestions when category changes
+        document.getElementById('category').addEventListener('change', updateSuggestions);
+    </script>
+</body>
+</html>
