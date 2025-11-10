@@ -226,33 +226,114 @@ EOF
                         echo "Building and pushing Docker image to Google Artifact Registry..."
                         echo "Image will be tagged as: ${imageTag}"
                         
-                        # Check if Docker daemon is actually accessible
-                        if docker info >/dev/null 2>&1; then
-                            echo "Docker daemon accessible, proceeding with build..."
-                            
-                            # Build Docker image
-                            echo "Building image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                            docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                            
-                            # Tag for Artifact Registry
-                            echo "Tagging image for Artifact Registry..."
-                            docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${imageTag}
-                            
-                            # Push to Artifact Registry
-                            echo "Pushing image to Artifact Registry..."
-                            docker push ${imageTag}
-                            
-                            echo "✅ Image pushed successfully to Artifact Registry: ${imageTag}"
-                        else
-                            echo "Docker daemon not accessible. Using Kaniko to build and push to Artifact Registry..."
-                            
-                            # Create a build job using existing jenkins service account
-                            echo "Creating Kaniko build job for Docker image..."
-                            kubectl apply -f - <<EOF
+                        # Try Docker-in-Docker approach first
+                        echo "Attempting Docker-in-Docker build..."
+                        
+                        # Create a DinD build job in Kubernetes
+                        kubectl apply -f - <<EOF
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: docker-build-${BUILD_NUMBER}
+  namespace: jenkins
+spec:
+  template:
+    spec:
+      serviceAccountName: jenkins-gke-sa
+      restartPolicy: Never
+      containers:
+      - name: docker-builder
+        image: docker:24-dind
+        securityContext:
+          privileged: true
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        - name: DOCKER_HOST
+          value: "tcp://localhost:2376"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/secrets/google/gcp-key.json
+        command: ["/bin/sh"]
+        args:
+        - "-c"
+        - |
+          echo "Starting Docker daemon..."
+          dockerd-entrypoint.sh &
+          sleep 10
+          
+          echo "Installing gcloud CLI..."
+          apk add --no-cache curl python3 py3-pip
+          curl -sSL https://sdk.cloud.google.com | bash
+          export PATH=\$PATH:/root/google-cloud-sdk/bin
+          
+          echo "Authenticating with GCP..."
+          gcloud auth activate-service-account --key-file=\$GOOGLE_APPLICATION_CREDENTIALS
+          gcloud config set project ${GCP_PROJECT_ID}
+          gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+          
+          echo "Cloning repository..."
+          apk add --no-cache git
+          git clone https://github.com/2021mt93693/ace-est-fitness-and-gym.git /workspace
+          cd /workspace
+          git checkout FEATURE-JENKINS
+          
+          echo "Building Docker image..."
+          docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+          
+          echo "Tagging image for Artifact Registry..."
+          docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${imageTag}
+          
+          echo "Pushing image to Artifact Registry..."
+          docker push ${imageTag}
+          
+          echo "✅ Image pushed successfully to Artifact Registry!"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi" 
+            cpu: "2000m"
+        volumeMounts:
+        - name: gcp-key
+          mountPath: /var/secrets/google
+          readOnly: true
+        - name: docker-storage
+          mountPath: /var/lib/docker
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-service-account-key
+      - name: docker-storage
+        emptyDir: {}
+EOF
+                        
+                        # Wait for job completion
+                        echo "Waiting for Docker build job to complete (this may take 5-10 minutes)..."
+                        kubectl wait --for=condition=complete job/docker-build-${BUILD_NUMBER} -n jenkins --timeout=600s
+                        
+                        # Check if job succeeded
+                        JOB_STATUS=\$(kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
+                        
+                        if [ "\$JOB_STATUS" = "True" ]; then
+                            echo "✅ Docker image built successfully using Docker-in-Docker!"
+                        else
+                            echo "❌ Docker build failed"
+                            echo "=== Build Job Logs ==="
+                            kubectl logs job/docker-build-${BUILD_NUMBER} -n jenkins --tail=100 || echo "Could not retrieve logs"
+                            
+                            # Fallback to Kaniko if DinD fails
+                            echo "Falling back to Kaniko build..."
+                            
+                            # Clean up failed DinD job
+                            kubectl delete job docker-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
+                            
+                            # Create Kaniko fallback job
+                            kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-${BUILD_NUMBER}
   namespace: jenkins
 spec:
   template:
@@ -289,44 +370,25 @@ spec:
           secretName: gcp-service-account-key
 EOF
                             
-                            # Wait for job completion with extended timeout
-                            echo "Waiting for build job to complete (this may take 10-15 minutes)..."
-                            kubectl wait --for=condition=complete job/docker-build-${BUILD_NUMBER} -n jenkins --timeout=900s
+                            echo "Waiting for Kaniko fallback build..."
+                            kubectl wait --for=condition=complete job/kaniko-build-${BUILD_NUMBER} -n jenkins --timeout=900s
                             
-                            # Check if job succeeded or failed
-                            JOB_STATUS=\$(kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
-                            
-                            if [ "\$JOB_STATUS" = "True" ]; then
-                                echo "✅ Docker image built successfully using Kaniko!"
-                            elif [ "\$JOB_STATUS" = "False" ] || [ "\$JOB_STATUS" = "Unknown" ]; then
-                                echo "❌ Docker build failed or timed out"
-                                echo "=== Build Job Logs ==="
-                                kubectl logs job/docker-build-${BUILD_NUMBER} -n jenkins --tail=50 || echo "Could not retrieve logs"
-                                
-                                # Check if the job failed due to timeout
-                                FAILED_STATUS=\$(kubectl get job docker-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "Unknown")
-                                if [ "\$FAILED_STATUS" = "True" ]; then
-                                    echo "Build failed due to job failure"
-                                    exit 1
-                                else
-                                    echo "Build may have timed out - check if image was pushed to registry"
-                                    # Try to verify if the image exists in the registry
-                                    if gcloud artifacts docker images list ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${DOCKER_IMAGE} --include-tags | grep -q "${DOCKER_TAG}"; then
-                                        echo "✅ Image found in registry despite timeout - continuing..."
-                                    else
-                                        echo "❌ Image not found in registry - build truly failed"
-                                        exit 1
-                                    fi
-                                fi
+                            KANIKO_STATUS=\$(kubectl get job kaniko-build-${BUILD_NUMBER} -n jenkins -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "Unknown")
+                            if [ "\$KANIKO_STATUS" = "True" ]; then
+                                echo "✅ Fallback Kaniko build succeeded!"
                             else
-                                echo "✅ Docker image built successfully using Kaniko!"
+                                echo "❌ Both DinD and Kaniko builds failed!"
+                                kubectl logs job/kaniko-build-${BUILD_NUMBER} -n jenkins --tail=50 || echo "Could not retrieve Kaniko logs"
+                                exit 1
                             fi
                             
-                            # Clean up build job
-                            kubectl delete job docker-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
-                            
-                            echo "Image built and pushed using Kaniko: ${imageTag}"
+                            kubectl delete job kaniko-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
                         fi
+                        
+                        # Clean up DinD build job
+                        kubectl delete job docker-build-${BUILD_NUMBER} -n jenkins --ignore-not-found=true
+                        
+                        echo "Image built and pushed: ${imageTag}"
                     """
                     
                     // Store the full image tag for deployment
