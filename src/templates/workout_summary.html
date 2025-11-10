@@ -1,0 +1,48 @@
+<h4><i class="fas fa-chart-line"></i> Full Session History</h4>
+
+{% if summary.total_time > 0 %}
+<div class="mb-3">
+    <strong>Total Training Time: {{ summary.total_time }} minutes</strong>
+</div>
+
+{% for category, data in summary.items() %}
+{% if category != 'total_time' %}
+<div class="mb-4">
+    <h5 class="text-primary">{{ category.upper() }}</h5>
+    {% if data.sessions %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Exercise</th>
+                    <th>Duration</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in data.sessions %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ session.exercise }}</td>
+                    <td>{{ session.duration }} min</td>
+                    <td>{{ session.timestamp.split(' ')[0] if session.timestamp else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <small class="text-muted">Total: {{ data.total_time }} minutes across {{ data.count }} sessions</small>
+    {% else %}
+    <p class="text-muted"><em>No sessions recorded.</em></p>
+    {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% else %}
+<div class="text-center py-4">
+    <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+    <p class="text-muted">No sessions logged yet! Start tracking your workouts.</p>
+</div>
+{% endif %}

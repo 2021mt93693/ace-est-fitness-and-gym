@@ -2,40 +2,389 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ACEestFitness and Gym</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACEest Fitness & Gym Tracker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --background-color: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text-color: #343A40;
+        }
+        
+        body {
+            background-color: var(--background-color);
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--primary-color) !important;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: var(--text-color);
+            font-weight: 600;
+            padding: 15px 25px;
+            margin-right: 10px;
+            border-radius: 10px 10px 0 0;
+            background-color: transparent;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: var(--card-bg);
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+        }
+        
+        .nav-tabs .nav-link:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+        
+        .tab-content {
+            background-color: var(--card-bg);
+            border-radius: 0 0 15px 15px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .workout-card {
+            background: var(--card-bg);
+            border: 1px solid #E9ECEF;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .btn-primary-custom {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            font-weight: 600;
+            padding: 12px 30px;
+            border-radius: 10px;
+        }
+        
+        .btn-secondary-custom {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            color: white;
+            font-weight: 600;
+            padding: 12px 30px;
+            border-radius: 10px;
+        }
+        
+        .form-control {
+            border-radius: 8px;
+            border: 2px solid #E9ECEF;
+            padding: 12px;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 20px 0;
+        }
+        
+        .section-header {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <h1 class="mb-4">ACEestFitness and Gym</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-        <form method="post" class="mb-4">
-            <div class="mb-3">
-                <label for="workout" class="form-label">Workout</label>
-                <input type="text" class="form-control" id="workout" name="workout" required>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-dumbbell"></i> ACEest Fitness & Gym</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4" style="color: var(--text-color);">
+                    <i class="fas fa-trophy"></i> Personal Fitness Tracker
+                </h1>
+                <p class="text-center text-muted mb-4">Track your progress with precision and achieve your fitness goals.</p>
+                
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show">
+                          {{ message }}
+                          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-tabs" id="fitnessTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="log-tab" data-bs-toggle="tab" data-bs-target="#log-content" type="button" role="tab">
+                            <i class="fas fa-plus-circle"></i> Log Workouts
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="plan-tab" data-bs-toggle="tab" data-bs-target="#plan-content" type="button" role="tab">
+                            <i class="fas fa-lightbulb"></i> Workout Plan
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="diet-tab" data-bs-toggle="tab" data-bs-target="#diet-content" type="button" role="tab">
+                            <i class="fas fa-apple-alt"></i> Diet Guide
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="progress-tab" data-bs-toggle="tab" data-bs-target="#progress-content" type="button" role="tab">
+                            <i class="fas fa-chart-bar"></i> Progress Tracker
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="fitnessTabContent">
+                    <!-- Workout Logging Tab -->
+                    <div class="tab-pane fade show active" id="log-content" role="tabpanel">
+                        <h2 class="section-header"><i class="fas fa-dumbbell"></i> ACEest Session Logger</h2>
+                        
+                        <div class="workout-card">
+                            <form method="post" id="workoutForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="category" class="form-label fw-bold">Category</label>
+                                        <select class="form-select" id="category" name="category" required>
+                                            {% for category in categories %}
+                                                <option value="{{ category }}" {{ 'selected' if category == 'Workout' else '' }}>{{ category }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="workout" class="form-label fw-bold">Exercise Name</label>
+                                        <input type="text" class="form-control" id="workout" name="workout" placeholder="e.g., Push-ups, Running" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="duration" class="form-label fw-bold">Duration (minutes)</label>
+                                        <input type="number" class="form-control" id="duration" name="duration" min="1" placeholder="30" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="submit" class="btn btn-primary-custom me-3">
+                                            <i class="fas fa-plus"></i> Add Session
+                                        </button>
+                                        <button type="button" class="btn btn-secondary-custom" onclick="showWorkoutSummary()">
+                                            <i class="fas fa-list"></i> View Summary
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <h3 class="section-header mt-4"><i class="fas fa-history"></i> Recent Workouts</h3>
+                        <div class="workout-card">
+                            {% if workouts %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Exercise</th>
+                                                <th>Duration</th>
+                                                <th>Category</th>
+                                                <th>Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for entry in workouts[-10:] %}
+                                            <tr>
+                                                <td><strong>{{ entry.workout }}</strong></td>
+                                                <td>{{ entry.duration }} min</td>
+                                                <td>
+                                                    <span class="badge bg-{{ 'success' if entry.category == 'Workout' else 'info' if entry.category == 'Warm-up' else 'warning' }}">
+                                                        {{ entry.category }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ entry.timestamp.split(' ')[0] if entry.timestamp else 'N/A' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-5 text-muted">
+                                    <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                                    <p>No workouts logged yet! Start tracking your fitness journey.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Workout Plan Tab -->
+                    <div class="tab-pane fade" id="plan-content" role="tabpanel">
+                        <div id="workoutPlanContent"></div>
+                    </div>
+
+                    <!-- Diet Guide Tab -->
+                    <div class="tab-pane fade" id="diet-content" role="tabpanel">
+                        <div id="dietGuideContent"></div>
+                    </div>
+
+                    <!-- Progress Tab -->
+                    <div class="tab-pane fade" id="progress-content" role="tabpanel">
+                        <div id="progressContent"></div>
+                    </div>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="duration" class="form-label">Duration (minutes)</label>
-                <input type="number" class="form-control" id="duration" name="duration" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Add Workout</button>
-        </form>
-        <h2>Logged Workouts</h2>
-        {% if workouts %}
-            <ul class="list-group">
-            {% for entry in workouts %}
-                <li class="list-group-item">{{ entry.workout }} - {{ entry.duration }} minutes</li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>No workouts logged yet.</p>
-        {% endif %}
+        </div>
     </div>
+
+    <!-- Workout Summary Modal -->
+    <div class="modal fade" id="summaryModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-chart-line"></i> Detailed Workout Summary</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="summaryContent">
+                    <!-- Content loaded via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Load content for tabs
+        document.addEventListener('DOMContentLoaded', function() {
+            loadWorkoutPlan();
+            loadDietGuide();
+            loadProgress();
+        });
+
+        // Handle tab changes
+        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function (event) {
+                const target = event.target.getAttribute('data-bs-target');
+                if (target === '#progress-content') {
+                    loadProgress();
+                }
+            });
+        });
+
+        function loadWorkoutPlan() {
+            fetch('/workout-plan')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('workoutPlanContent').innerHTML = html;
+                });
+        }
+
+        function loadDietGuide() {
+            fetch('/diet-guide')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('dietGuideContent').innerHTML = html;
+                });
+        }
+
+        function loadProgress() {
+            fetch('/progress')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('progressContent').innerHTML = html;
+                    loadCharts();
+                });
+        }
+
+        function loadCharts() {
+            fetch('/api/progress-data')
+                .then(response => response.json())
+                .then(data => {
+                    createCharts(data);
+                });
+        }
+
+        function createCharts(data) {
+            const categories = Object.keys(data);
+            const values = Object.values(data);
+            
+            if (values.every(v => v === 0)) {
+                return;
+            }
+
+            // Bar Chart
+            const barCtx = document.getElementById('barChart');
+            if (barCtx) {
+                new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            label: 'Minutes',
+                            data: values,
+                            backgroundColor: ['#2196F3', '#4CAF50', '#FFC107'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Total Minutes per Category'
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Pie Chart
+            const pieCtx = document.getElementById('pieChart');
+            if (pieCtx) {
+                new Chart(pieCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: ['#2196F3', '#4CAF50', '#FFC107']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Workout Distribution (%)'
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function showWorkoutSummary() {
+            fetch('/workout-summary')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('summaryContent').innerHTML = html;
+                    new bootstrap.Modal(document.getElementById('summaryModal')).show();
+                });
+        }
+    </script>
 </body>
 </html>

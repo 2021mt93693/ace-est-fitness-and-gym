@@ -1,0 +1,97 @@
+<h2 class="section-header"><i class="fas fa-chart-bar"></i> Personal Progress Tracker</h2>
+
+<div class="workout-card">
+    <p class="text-muted mb-4">Visualization of your logged workout time distribution and progress over time.</p>
+    
+    {% if progress_data and progress_data.values() | sum > 0 %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <h4 class="text-primary">Lifetime Statistics</h4>
+        <div class="row">
+            <div class="col-md-3 text-center">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h2>{{ workout_summary.total_time }}</h2>
+                        <p class="mb-0">Total Minutes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h2>{{ workout_summary.Workout.count }}</h2>
+                        <p class="mb-0">Workout Sessions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body">
+                        <h2>{{ workout_summary['Warm-up'].count }}</h2>
+                        <p class="mb-0">Warm-up Sessions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h2>{{ workout_summary['Cool-down'].count }}</h2>
+                        <p class="mb-0">Cool-down Sessions</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <h5>Category Breakdown:</h5>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Category</th>
+                        <th>Total Time (min)</th>
+                        <th>Sessions</th>
+                        <th>Average per Session</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category, data in workout_summary.items() %}
+                    {% if category != 'total_time' %}
+                    <tr>
+                        <td>
+                            <span class="badge bg-{{ 'success' if category == 'Workout' else 'info' if category == 'Warm-up' else 'warning' }}">
+                                {{ category }}
+                            </span>
+                        </td>
+                        <td><strong>{{ data.total_time }}</strong></td>
+                        <td>{{ data.count }}</td>
+                        <td>{{ "%.1f"|format(data.total_time / data.count if data.count > 0 else 0) }} min</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-chart-bar fa-4x mb-3"></i>
+        <h4>No workout data logged yet</h4>
+        <p>Log a session to see your progress visualization!</p>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,28 @@
+<h2 class="section-header"><i class="fas fa-lightbulb"></i> Personalized Workout Plan Guide</h2>
+
+<div class="workout-card">
+    <p class="text-muted mb-4">Follow these structured workout plans designed for optimal fitness results.</p>
+    
+    {% for category, exercises in plan_data.items() %}
+    <div class="mb-4">
+        <h4 class="text-primary"><i class="fas fa-fire"></i> {{ category }}</h4>
+        <ul class="list-group list-group-flush">
+            {% for exercise in exercises %}
+            <li class="list-group-item border-0 px-0">
+                <i class="fas fa-check-circle text-success me-2"></i>{{ exercise }}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+    
+    <div class="alert alert-info mt-4">
+        <h5><i class="fas fa-info-circle"></i> Pro Tips:</h5>
+        <ul class="mb-0">
+            <li>Start with lighter weights and focus on proper form</li>
+            <li>Rest 30-60 seconds between sets for strength training</li>
+            <li>Stay hydrated throughout your workout</li>
+            <li>Listen to your body and adjust intensity as needed</li>
+        </ul>
+    </div>
+</div>
