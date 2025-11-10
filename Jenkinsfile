@@ -26,16 +26,6 @@ pipeline {
             }
         }
         
-        stage('Verify Docker') {
-            steps {
-                sh '''
-                    echo "Verifying Docker installation..."
-                    docker --version || echo "Docker not found in PATH"
-                    docker info || echo "Docker daemon not accessible"
-                '''
-            }
-        }
-        
         stage('Setup Python Environment') {
             agent {
                 docker {
